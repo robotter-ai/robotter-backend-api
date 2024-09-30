@@ -1,13 +1,15 @@
 from decimal import Decimal
 import uuid
 from fastapi import APIRouter, HTTPException
-from typing import List
-
+from typing import List, Dict, Any, Optional, Union
+from pydantic import BaseModel
 from config import BROKER_HOST, BROKER_PASSWORD, BROKER_PORT, BROKER_USERNAME
 from utils.models import HummingbotInstanceConfig, Instance, InstanceStats, Strategy, BacktestRequest, BacktestResult, StartStrategyRequest, InstanceResponse
 from services.docker_service import DockerManager
 from services.bots_orchestrator import BotsManager
 from fastapi_walletauth import JWTWalletAuthDep, jwt_authorization_router
+from hummingbot.strategy.pure_market_making.pure_market_making_config_map import pure_market_making_config_map
+
 
 router = APIRouter(tags=["Instance Management"])
 router.include_router(jwt_authorization_router)
@@ -16,8 +18,37 @@ docker_manager = DockerManager()
 bots_manager = BotsManager(broker_host=BROKER_HOST, broker_port=BROKER_PORT, 
                            broker_username=BROKER_USERNAME, broker_password=BROKER_PASSWORD)
 
+class StrategyParameter(BaseModel):
+    type: str
+    prompt: str
+    default: Optional[Union[str, int, float, bool]]
+    min_value: Optional[Union[int, float]]
+    max_value: Optional[Union[int, float]]
+    required: bool
+    validator: Optional[str]
+
+class Strategy(BaseModel):
+    name: str
+    parameters: Dict[str, StrategyParameter]
+
+def convert_config_to_strategy_format(config_map: Dict[str, Any]) -> Strategy:
+    parameters = {}
+    for key, config_var in config_map.items():
+        param = StrategyParameter(
+            type=config_var.type if hasattr(config_var, 'type') else config_var.type_str,
+            prompt=str(config_var.prompt).replace(">>> ", "") if config_var.prompt is not None else "",
+            default=config_var.default if hasattr(config_var, 'default') else None,
+            min_value=config_var.min_value if hasattr(config_var, 'min_value') else None,
+            max_value=config_var.max_value if hasattr(config_var, 'max_value') else None,
+            required=True,
+            validator=None
+        )
+        parameters[key] = param
+    
+    return Strategy(name="pure_market_making", parameters=parameters)
+
 @router.post("/instances", response_model=InstanceResponse)
-async def create_instance(wallet_auth: JWTWalletAuthDep):
+async def create_instance():
     # Create a new Hummingbot instance
     instance_config = HummingbotInstanceConfig(
         instance_name=f"instance_{uuid.uuid4().hex[:8]}",
@@ -59,18 +90,14 @@ async def get_instance_stats(instance_id: str, wallet_auth: JWTWalletAuthDep):
     return InstanceStats(pnl=pnl)
 
 @router.get("/strategies", response_model=List[Strategy])
-async def get_strategies(wallet_auth: JWTWalletAuthDep):
-    # This is a placeholder. You need to implement a way to get all available strategies and their configurations.
-    return [
-        # TODO: Add pure market making
-        Strategy(
-            name="simple_market_making",
-            parameters={"bid_spread": "float", "ask_spread": "float"},
-            min_values={"bid_spread": 0.0, "ask_spread": 0.0},
-            max_values={"bid_spread": 1.0, "ask_spread": 1.0},
-            default_values={"bid_spread": 0.01, "ask_spread": 0.01}
-        )
-    ]
+async def get_strategies():
+    strategies = []
+    
+    # Add pure market making strategy
+    pure_market_making = convert_config_to_strategy_format(pure_market_making_config_map)
+    strategies.append(pure_market_making)
+    
+    return strategies
 
 @router.post("/strategies/backtest", response_model=BacktestResult)
 async def backtest_strategy(backtest_request: BacktestRequest, wallet_auth: JWTWalletAuthDep):
@@ -95,5 +122,3 @@ async def stop_instance(instance_id: str, wallet_auth: JWTWalletAuthDep):
     if not response:
         raise HTTPException(status_code=500, detail="Failed to stop the instance")
     return {"status": "success", "message": "Instance stopped successfully"}
-
-# from hummingbot.strategy.pure_market_making.pure_market_making_config_map import pure_market_making_config_map
