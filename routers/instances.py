@@ -9,6 +9,7 @@ from services.docker_service import DockerManager
 from services.bots_orchestrator import BotsManager
 from fastapi_walletauth import JWTWalletAuthDep, jwt_authorization_router
 from hummingbot.strategy.pure_market_making.pure_market_making_config_map import pure_market_making_config_map
+from .strategy_models import Strategy, convert_config_to_strategy_format
 
 
 router = APIRouter(tags=["Instance Management"])
@@ -18,34 +19,6 @@ docker_manager = DockerManager()
 bots_manager = BotsManager(broker_host=BROKER_HOST, broker_port=BROKER_PORT, 
                            broker_username=BROKER_USERNAME, broker_password=BROKER_PASSWORD)
 
-class StrategyParameter(BaseModel):
-    type: str
-    prompt: str
-    default: Optional[Union[str, int, float, bool]]
-    min_value: Optional[Union[int, float]]
-    max_value: Optional[Union[int, float]]
-    required: bool
-    validator: Optional[str]
-
-class Strategy(BaseModel):
-    name: str
-    parameters: Dict[str, StrategyParameter]
-
-def convert_config_to_strategy_format(config_map: Dict[str, Any]) -> Strategy:
-    parameters = {}
-    for key, config_var in config_map.items():
-        param = StrategyParameter(
-            type=config_var.type if hasattr(config_var, 'type') else config_var.type_str,
-            prompt=str(config_var.prompt).replace(">>> ", "") if config_var.prompt is not None else "",
-            default=config_var.default if hasattr(config_var, 'default') else None,
-            min_value=config_var.min_value if hasattr(config_var, 'min_value') else None,
-            max_value=config_var.max_value if hasattr(config_var, 'max_value') else None,
-            required=True,
-            validator=None
-        )
-        parameters[key] = param
-    
-    return Strategy(name="pure_market_making", parameters=parameters)
 
 @router.post("/instances", response_model=InstanceResponse)
 async def create_instance():
