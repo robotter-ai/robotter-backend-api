@@ -72,11 +72,6 @@ async def get_strategies():
     
     return strategies
 
-@router.post("/strategies/backtest", response_model=BacktestResult)
-async def backtest_strategy(backtest_request: BacktestRequest, wallet_auth: JWTWalletAuthDep):
-    # This is a placeholder. You need to implement the actual backtesting logic.
-    return BacktestResult(pnl=Decimal("100.0"))
-
 @router.post("/instance", response_model=StartStrategyRequest)
 async def create_instance(wallet_auth: JWTWalletAuthDep):
     #TODO: Return wallet address of bot
