@@ -1,16 +1,15 @@
 from decimal import Decimal
-import uuid
+from typing import List
+
 from fastapi import APIRouter, HTTPException
-from typing import List, Dict, Any, Optional, Union
-from pydantic import BaseModel
-from config import BROKER_HOST, BROKER_PASSWORD, BROKER_PORT, BROKER_USERNAME
-from utils.models import HummingbotInstanceConfig, Instance, InstanceStats, Strategy, BacktestRequest, BacktestResult, StartStrategyRequest, InstanceResponse
-from services.docker_service import DockerManager
-from services.bots_orchestrator import BotsManager
 from fastapi_walletauth import JWTWalletAuthDep, jwt_authorization_router
 from hummingbot.strategy.pure_market_making.pure_market_making_config_map import pure_market_making_config_map
-from .strategy_models import Strategy, convert_config_to_strategy_format
 
+from config import BROKER_HOST, BROKER_PASSWORD, BROKER_PORT, BROKER_USERNAME
+from services.bots_orchestrator import BotsManager
+from services.docker_service import DockerManager
+from utils.models import HummingbotInstanceConfig, Instance, InstanceStats, StartStrategyRequest, InstanceResponse
+from .strategy_models import Strategy, convert_config_to_strategy_format
 
 router = APIRouter(tags=["Instance Management"])
 router.include_router(jwt_authorization_router)
@@ -21,7 +20,7 @@ bots_manager = BotsManager(broker_host=BROKER_HOST, broker_port=BROKER_PORT,
 
 
 @router.post("/instance", response_model=InstanceResponse)
-async def create_instance():
+async def create_instance(wallet_auth: JWTWalletAuthDep):
     # Create a new Hummingbot instance
     instance_config = HummingbotInstanceConfig(
         instance_name=f"instance_{wallet_auth.address}",
