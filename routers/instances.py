@@ -1,16 +1,15 @@
 from decimal import Decimal
-import uuid
+from typing import List
+
 from fastapi import APIRouter, HTTPException
-from typing import List, Dict, Any, Optional, Union
-from pydantic import BaseModel
-from config import BROKER_HOST, BROKER_PASSWORD, BROKER_PORT, BROKER_USERNAME
-from utils.models import HummingbotInstanceConfig, Instance, InstanceStats, Strategy, BacktestRequest, BacktestResult, StartStrategyRequest, InstanceResponse
-from services.docker_service import DockerManager
-from services.bots_orchestrator import BotsManager
 from fastapi_walletauth import JWTWalletAuthDep, jwt_authorization_router
 from hummingbot.strategy.pure_market_making.pure_market_making_config_map import pure_market_making_config_map
-from .strategy_models import Strategy, convert_config_to_strategy_format
 
+from config import BROKER_HOST, BROKER_PASSWORD, BROKER_PORT, BROKER_USERNAME
+from services.bots_orchestrator import BotsManager
+from services.docker_service import DockerManager
+from utils.models import HummingbotInstanceConfig, Instance, InstanceStats, StartStrategyRequest, InstanceResponse
+from .strategy_models import Strategy, convert_config_to_strategy_format
 
 router = APIRouter(tags=["Instance Management"])
 router.include_router(jwt_authorization_router)
@@ -20,21 +19,29 @@ bots_manager = BotsManager(broker_host=BROKER_HOST, broker_port=BROKER_PORT,
                            broker_username=BROKER_USERNAME, broker_password=BROKER_PASSWORD)
 
 
-@router.post("/instances", response_model=InstanceResponse)
-async def create_instance():
+@router.post("/instance", response_model=InstanceResponse)
+async def create_instance(wallet_auth: JWTWalletAuthDep):
     # Create a new Hummingbot instance
     instance_config = HummingbotInstanceConfig(
-        instance_name=f"instance_{uuid.uuid4().hex[:8]}",
+        instance_name=f"instance_{wallet_auth.address}",
         credentials_profile="master_account",
         image="hummingbot/hummingbot:latest"
     )
-    result = docker_manager.create_hummingbot_instance(instance_config)
-    if result["success"]:
+    #result = docker_manager.create_hummingbot_instance(instance_config)
+    #if result["success"]:
+    if True:
         # Generate a wallet address for the instance (this is a placeholder, implement actual wallet generation)
-        wallet_address = f"0x{uuid.uuid4().hex}"
+        wallet_address = wallet_auth.address
         return InstanceResponse(instance_id=instance_config.instance_name, wallet_address=wallet_address)
     else:
         raise HTTPException(status_code=500, detail=result["message"])
+
+@router.delete("/instance/{instance_id}")
+async def delete_instance(instance_id: str, wallet_auth: JWTWalletAuthDep):
+    #response = docker_manager.delete_hummingbot_instance(instance_id)
+    #if not response["success"]:
+    #    raise HTTPException(status_code=500, detail=response["message"])
+    return {"status": "success", "message": "Instance deleted successfully"}
 
 @router.get("/instances", response_model=List[Instance])
 async def get_instances():
@@ -65,22 +72,17 @@ async def get_instance_stats(instance_id: str, wallet_auth: JWTWalletAuthDep):
 @router.get("/strategies", response_model=List[Strategy])
 async def get_strategies():
     strategies = []
-    
+
     # Add pure market making strategy
     pure_market_making = convert_config_to_strategy_format(pure_market_making_config_map)
     strategies.append(pure_market_making)
-    
+
     return strategies
 
-@router.post("/strategies/backtest", response_model=BacktestResult)
-async def backtest_strategy(backtest_request: BacktestRequest, wallet_auth: JWTWalletAuthDep):
-    # This is a placeholder. You need to implement the actual backtesting logic.
-    return BacktestResult(pnl=Decimal("100.0"))
-
-@router.post("/instance", response_model=StartStrategyRequest)
-async def create_instance(wallet_auth: JWTWalletAuthDep):
-    #TODO: Return wallet address of bot
-    return StartStrategyRequest(strategy_name="simple_market_making", parameters={"bid_spread": "float", "ask_spread": "float"})
+#@router.post("/instance", response_model=StartStrategyRequest)
+#async def create_instance(wallet_auth: JWTWalletAuthDep):
+#    #TODO: Return wallet address of bot
+#    return StartStrategyRequest(strategy_name="simple_market_making", parameters={"bid_spread": "float", "ask_spread": "float"})
 
 @router.put("/instance/{instance_id}/start")
 async def start_instance(instance_id: str, start_request: StartStrategyRequest, wallet_auth: JWTWalletAuthDep):
