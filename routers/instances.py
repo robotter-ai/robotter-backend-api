@@ -2,7 +2,7 @@ from decimal import Decimal
 from typing import List
 
 from fastapi import APIRouter, HTTPException
-from fastapi_walletauth import JWTWalletAuthDep, jwt_authorization_router
+from fastapi_walletauth import JWTWalletAuthDep
 
 from config import BROKER_HOST, BROKER_PASSWORD, BROKER_PORT, BROKER_USERNAME
 from services.bots_orchestrator import BotsManager
@@ -10,7 +10,6 @@ from services.docker_service import DockerManager
 from utils.models import HummingbotInstanceConfig, Instance, InstanceStats, StartStrategyRequest, InstanceResponse
 
 router = APIRouter(tags=["Instance Management"])
-router.include_router(jwt_authorization_router)
 
 docker_manager = DockerManager()
 bots_manager = BotsManager(broker_host=BROKER_HOST, broker_port=BROKER_PORT, 

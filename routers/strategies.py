@@ -1,14 +1,12 @@
 from typing import List
 
-from fastapi import APIRouter, HTTPException
-from hummingbot.strategy.pure_market_making.pure_market_making_config_map import pure_market_making_config_map
-from hummingbot.strategy_v2.controllers.market_making_controller_base import MarketMakingControllerConfigBase
-from .strategy_models import Strategy, convert_config_to_strategy_format
+from fastapi import APIRouter
+from .strategy_models import StrategyParameter, convert_config_to_strategy_format
 
 router = APIRouter(tags=["Instance Management"])
 
 
-@router.get("/strategies", response_model=List[Strategy])
+@router.get("/strategies", response_model=List[StrategyParameter])
 async def get_strategies():
     strategies = []
 
