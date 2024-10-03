@@ -1,15 +1,25 @@
+from enum import Enum
 from typing import Any, Dict, Optional, Union, List
+
+from hummingbot.core.data_type.common import PositionMode
 from pydantic import BaseModel, Field
 from decimal import Decimal
-from hummingbot.client.config.config_var import ConfigVar
-from hummingbot.client.config.config_validators import (
-    validate_decimal, validate_int, validate_bool,
-    validate_float, validate_exchange, validate_market_trading_pair,
-    validate_connector
-)
-from hummingbot.strategy_v2.controllers.market_making_controller_base import MarketMakingControllerConfigBase
+from hummingbot.strategy_v2.controllers import MarketMakingControllerConfigBase, ControllerConfigBase, DirectionalTradingControllerConfigBase
 import importlib
 import os
+import logging
+import functools
+
+from pydantic.fields import ModelField
+from pydantic.main import ModelMetaclass
+
+from bots.controllers.directional_trading.bollinger_v1 import BollingerV1ControllerConfig
+
+logger = (
+    logging.getLogger(__name__)
+    if __name__ != "__main__"
+    else logging.getLogger("uvicorn")
+)
 
 class StrategyParameter(BaseModel):
     name: str
@@ -27,75 +37,98 @@ class StrategyParameter(BaseModel):
     is_trading_pair: bool = False
     display_type: str = Field(default="input", description="Can be 'input', 'slider', 'dropdown', 'toggle', or 'date'")
 
-def extract_validator_info(validator, field_type):
-    info = {}
-    if isinstance(validator, (validate_decimal, validate_float, validate_int)):
-        info["min_value"] = validator.min_value
-        info["max_value"] = validator.max_value
-        if field_type == "percentage":
-            info["is_percentage"] = True
-            info["display_type"] = "slider"
-        elif field_type == "price":
-            info["is_price"] = True
-        elif field_type == "timespan":
-            info["is_timespan"] = True
-    elif isinstance(validator, validate_bool):
-        info["valid_values"] = [True, False]
-        info["display_type"] = "toggle"
-    elif isinstance(validator, (validate_exchange, validate_connector)):
-        info["valid_values"] = validator.valid_exchanges
-        info["is_connector"] = True
-        info["display_type"] = "dropdown"
-    elif isinstance(validator, validate_market_trading_pair):
-        info["is_trading_pair"] = True
-    return info
 
-def convert_config_to_strategy_format(config_map: Dict[str, ConfigVar]) -> Dict[str, StrategyParameter]:
-    parameters = {}
-    for key, config_var in config_map.items():
-        prompt = config_var.prompt if isinstance(config_var.prompt, str) else ""
-        if callable(config_var.prompt):
-            try:
-                prompt = config_var.prompt()
-            except:
-                prompt = ""
-        
-        prompt = prompt.replace('>>> ', '').strip()
-
-        required = config_var.required if isinstance(config_var.required, bool) else False
-        if callable(config_var.required):
-            try:
-                required = config_var.required()
-            except:
-                required = False
-
-        validator_info = extract_validator_info(config_var.validator, config_var.type) if config_var.validator else {}
-
-        param = StrategyParameter(
-            name=key,
-            type=config_var.type,
-            prompt=prompt,
-            default=config_var.default,
-            required=required,
-            **validator_info
-        )
-        parameters[key] = param
+def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParameter:
+    param = StrategyParameter(
+        name=name,
+        type=str(field.type_.__name__),
+        prompt=field.description if hasattr(field, 'description') else "",
+        default=field.default,
+        required=field.required or field.default is not None,
+    )
     
-    return parameters
+    # structure of field
+    print(field)
+    if hasattr(field, 'client_data'):
+        client_data = field.client_data
+        if param.prompt == "":
+            param.prompt = client_data.prompt() if callable(client_data.prompt) else client_data.prompt
+        if not param.required:
+            param.required = client_data.prompt_on_new if hasattr(client_data, 'prompt_on_new') else param.required
+    param.display_type = "input"
+    
+    # Check for gt (greater than) and lt (less than) in field definition
+    if hasattr(field.field_info, 'gt'):
+        param.min_value = field.field_info.gt
+    if hasattr(field.field_info, 'lt'):
+        param.max_value = field.field_info.lt
+    
+    # Set display_type to "slider" only if both min and max values are present
+    if param.min_value is not None and param.max_value is not None:
+        param.display_type = "slider"
+    elif param.type == "bool":
+        param.display_type = "toggle"
+    
+    # Check for specific use cases
+    if "connector" in name.lower():
+        param.is_connector = True
+    if "trading_pair" in name.lower():
+        param.is_trading_pair = True
+    if any(word in name.lower() for word in ["percentage", "percent", "ratio", "pct"]):
+        param.is_percentage = True
+    if "price" in name.lower():
+        param.is_price = True
+        if param.min_value is None:
+            param.min_value = Decimal(0)
+    if "amount" in name.lower():
+        param.min_value = Decimal(0)
+    if any(word in name.lower() for word in ["time", "interval", "duration"]):
+        param.is_timespan = True
+    try:
+        if issubclass(field.type_, Enum):
+            param.valid_values = [item.value for item in field.type_]
+            param.display_type = "dropdown"
+    except:
+        pass
+    return param
 
+
+@functools.lru_cache(maxsize=1)
 def get_all_strategy_maps() -> Dict[str, Dict[str, StrategyParameter]]:
     strategy_maps = {}
-    controllers_dir = "hummingbot/strategy_v2/controllers"
+    controllers_dir = "bots/controllers"
     
     for root, dirs, files in os.walk(controllers_dir):
         for file in files:
             if file.endswith(".py") and not file.startswith("__"):
                 module_path = os.path.join(root, file).replace("/", ".").replace("\\", ".")[:-3]
-                module = importlib.import_module(module_path)
+                module_path = f"bots.{module_path.split('bots.')[-1]}"
                 
-                for name, obj in module.__dict__.items():
-                    if isinstance(obj, type) and issubclass(obj, MarketMakingControllerConfigBase):
-                        config_map = {field: getattr(obj, field) for field in obj.__fields__}
-                        strategy_maps[obj.controller_name] = convert_config_to_strategy_format(config_map)
-    
+                try:
+                    module = importlib.import_module(module_path)
+                    
+                    for name, obj in module.__dict__.items():
+                        if (
+                            isinstance(obj, type)
+                            and issubclass(obj, ControllerConfigBase)
+                            and obj is not ControllerConfigBase
+                            and obj is not MarketMakingControllerConfigBase
+                            and obj is not DirectionalTradingControllerConfigBase
+                        ):
+                            assert isinstance(obj, ModelMetaclass)
+                            strategy_name = obj.controller_name if hasattr(obj, 'controller_name') else name.lower()
+                            parameters = {}
+                            for field_name, field in obj.__fields__.items():
+                                if field_name not in ['id', 'controller_name', 'controller_type']:
+                                    param = convert_to_strategy_parameter(field_name, field)
+                                    parameters[field_name] = param
+                            
+                            strategy_maps[strategy_name] = parameters
+                except ImportError as e:
+                    print(f"Error importing module {module_path}: {e}")
+                except Exception as e:
+                    print(f"Unexpected error processing {module_path}: {e}")
+                    import traceback
+                    traceback.print_exc()
+    print(f"strategy_maps: {len(strategy_maps)}")
     return strategy_maps
