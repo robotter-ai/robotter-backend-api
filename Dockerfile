@@ -9,14 +9,17 @@ RUN apt-get update && \
 # Set the working directory in the container
 WORKDIR /backend-api
 
-# Copy the current directory contents and the Conda environment file into the container
-COPY . .
+# Copy only the environment.yml file first
+COPY environment.yml .
 
 # Create the environment from the environment.yml file
 RUN conda env create -f environment.yml
 
 # Make RUN commands use the new environment
 SHELL ["conda", "run", "-n", "backend-api", "/bin/bash", "-c"]
+
+# Copy the rest of the application code
+COPY . .
 
 # The code to run when container is started
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "backend-api", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
