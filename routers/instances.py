@@ -3,13 +3,11 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException
 from fastapi_walletauth import JWTWalletAuthDep, jwt_authorization_router
-from hummingbot.strategy.pure_market_making.pure_market_making_config_map import pure_market_making_config_map
 
 from config import BROKER_HOST, BROKER_PASSWORD, BROKER_PORT, BROKER_USERNAME
 from services.bots_orchestrator import BotsManager
 from services.docker_service import DockerManager
 from utils.models import HummingbotInstanceConfig, Instance, InstanceStats, StartStrategyRequest, InstanceResponse
-from .strategy_models import Strategy, convert_config_to_strategy_format
 
 router = APIRouter(tags=["Instance Management"])
 router.include_router(jwt_authorization_router)
@@ -19,7 +17,7 @@ bots_manager = BotsManager(broker_host=BROKER_HOST, broker_port=BROKER_PORT,
                            broker_username=BROKER_USERNAME, broker_password=BROKER_PASSWORD)
 
 
-@router.post("/instance", response_model=InstanceResponse)
+@router.post("/instances", response_model=InstanceResponse)
 async def create_instance(wallet_auth: JWTWalletAuthDep):
     # Create a new Hummingbot instance
     instance_config = HummingbotInstanceConfig(
@@ -36,7 +34,7 @@ async def create_instance(wallet_auth: JWTWalletAuthDep):
     else:
         raise HTTPException(status_code=500, detail=result["message"])
 
-@router.delete("/instance/{instance_id}")
+@router.delete("/instances/{instance_id}")
 async def delete_instance(instance_id: str, wallet_auth: JWTWalletAuthDep):
     #response = docker_manager.delete_hummingbot_instance(instance_id)
     #if not response["success"]:
@@ -57,7 +55,7 @@ async def get_instances():
         ))
     return instances
 
-@router.get("/instance/{instance_id}/stats", response_model=InstanceStats)
+@router.get("/instances/{instance_id}/stats", response_model=InstanceStats)
 async def get_instance_stats(instance_id: str, wallet_auth: JWTWalletAuthDep):
     status = bots_manager.get_bot_status(instance_id)
     if status["status"] == "error":
@@ -69,29 +67,21 @@ async def get_instance_stats(instance_id: str, wallet_auth: JWTWalletAuthDep):
             pnl += Decimal(str(controller["performance"]["pnl"]))
     return InstanceStats(pnl=pnl)
 
-@router.get("/strategies", response_model=List[Strategy])
-async def get_strategies():
-    strategies = []
-
-    # Add pure market making strategy
-    pure_market_making = convert_config_to_strategy_format(pure_market_making_config_map)
-    strategies.append(pure_market_making)
-
-    return strategies
-
 #@router.post("/instance", response_model=StartStrategyRequest)
 #async def create_instance(wallet_auth: JWTWalletAuthDep):
 #    #TODO: Return wallet address of bot
 #    return StartStrategyRequest(strategy_name="simple_market_making", parameters={"bid_spread": "float", "ask_spread": "float"})
 
-@router.put("/instance/{instance_id}/start")
+
+@router.post("/instance/{instance_id}/start")
 async def start_instance(instance_id: str, start_request: StartStrategyRequest, wallet_auth: JWTWalletAuthDep):
     response = bots_manager.start_bot(instance_id, script=start_request.strategy_name, conf=start_request.parameters)
     if not response:
         raise HTTPException(status_code=500, detail="Failed to start the instance")
     return {"status": "success", "message": "Instance started successfully"}
 
-@router.post("/strategies/{instance_id}/stop")
+
+@router.post("/instance/{instance_id}/stop")
 async def stop_instance(instance_id: str, wallet_auth: JWTWalletAuthDep):
     response = bots_manager.stop_bot(instance_id)
     if not response:
