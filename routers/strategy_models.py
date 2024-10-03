@@ -7,6 +7,9 @@ from hummingbot.client.config.config_validators import (
     validate_float, validate_exchange, validate_market_trading_pair,
     validate_connector
 )
+from hummingbot.strategy_v2.controllers.market_making_controller_base import MarketMakingControllerConfigBase
+import importlib
+import os
 
 class StrategyParameter(BaseModel):
     name: str
@@ -79,3 +82,20 @@ def convert_config_to_strategy_format(config_map: Dict[str, ConfigVar]) -> Dict[
         parameters[key] = param
     
     return parameters
+
+def get_all_strategy_maps() -> Dict[str, Dict[str, StrategyParameter]]:
+    strategy_maps = {}
+    controllers_dir = "hummingbot/strategy_v2/controllers"
+    
+    for root, dirs, files in os.walk(controllers_dir):
+        for file in files:
+            if file.endswith(".py") and not file.startswith("__"):
+                module_path = os.path.join(root, file).replace("/", ".").replace("\\", ".")[:-3]
+                module = importlib.import_module(module_path)
+                
+                for name, obj in module.__dict__.items():
+                    if isinstance(obj, type) and issubclass(obj, MarketMakingControllerConfigBase):
+                        config_map = {field: getattr(obj, field) for field in obj.__fields__}
+                        strategy_maps[obj.controller_name] = convert_config_to_strategy_format(config_map)
+    
+    return strategy_maps
