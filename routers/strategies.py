@@ -1,17 +1,11 @@
-from typing import List
+from typing import Dict
 
 from fastapi import APIRouter
-from .strategy_models import StrategyParameter, convert_config_to_strategy_format
+from .strategy_models import StrategyParameter, get_all_strategy_maps
 
 router = APIRouter(tags=["Instance Management"])
 
 
-@router.get("/strategies", response_model=List[StrategyParameter])
+@router.get("/strategies", response_model=Dict[str, Dict[str, StrategyParameter]])
 async def get_strategies():
-    strategies = []
-
-    # Add pure market making strategy
-    pure_market_making = convert_config_to_strategy_format(pure_market_making_config_map)
-    strategies.append(pure_market_making)
-
-    return strategies
+    return get_all_strategy_maps()
