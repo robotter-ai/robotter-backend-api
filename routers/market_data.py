@@ -1,5 +1,3 @@
-import asyncio
-import pandas as pd
 from fastapi import APIRouter
 from hummingbot.data_feed.candles_feed.candles_factory import CandlesConfig, CandlesFactory
 import aiohttp
@@ -31,20 +29,6 @@ async def fetch_birdeye_data(config: HistoricalCandlesConfig) -> HistoricalCandl
                 return HistoricalCandlesResponse(data=candle_data)
             else:
                 raise Exception(f"Failed to fetch data: {response.status}")
-
-@router.post("/real-time-candles")
-async def get_candles(candles_config: CandlesConfig):
-    try:
-        candles = candles_factory.get_candle(candles_config)
-        candles.start()
-        while not candles.ready:
-            await asyncio.sleep(1)
-        df = candles.candles_df
-        candles.stop()
-        df.drop_duplicates(subset=["timestamp"], inplace=True)
-        return df
-    except Exception as e:
-        return {"error": str(e)}
 
 @router.post("/historical-candles", response_model=HistoricalCandlesResponse)
 async def get_historical_candles(config: HistoricalCandlesConfig) -> HistoricalCandlesResponse:
