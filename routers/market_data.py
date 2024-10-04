@@ -3,6 +3,7 @@ from hummingbot.data_feed.candles_feed.candles_factory import CandlesConfig, Can
 import aiohttp
 import os
 from dotenv import load_dotenv
+import numpy as np
 
 from .market_data_models import CandleConnector, HistoricalCandlesConfig, HistoricalCandlesResponse, CandleData
 
@@ -44,20 +45,24 @@ async def get_historical_candles(config: HistoricalCandlesConfig) -> HistoricalC
         candles = candles_factory.get_candle(candles_config)
         historical_data = await candles.get_historical_candles(config=config)
         
-        # Convert DataFrame to HistoricalCandlesResponse
+        # Convert DataFrame to numpy array for faster processing
+        data_array = historical_data[['open', 'high', 'low', 'close', 'volume', 'timestamp']].to_numpy()
+        
+        # Use numpy vectorization to create CandleData objects
         candle_data = [
             CandleData(
-                o=row['open'],
-                h=row['high'],
-                l=row['low'],
-                c=row['close'],
-                v=row['volume'],
-                unixTime=int(row['timestamp']),
+                o=float(o),
+                h=float(h),
+                l=float(l),
+                c=float(c),
+                v=float(v),
+                unixTime=int(t),
                 address=config.market_address,
                 type=config.interval.value
             )
-            for _, row in historical_data.iterrows()
+            for o, h, l, c, v, t in data_array
         ]
+        
         return HistoricalCandlesResponse(data=candle_data)
     except Exception as e:
         return {"error": str(e)}
