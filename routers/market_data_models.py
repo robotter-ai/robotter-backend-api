@@ -19,6 +19,7 @@ class CandleConnector(Enum):
 
 class HistoricalCandlesConfig(BaseModel):
     connector_name: CandleConnector = CandleConnector.BIRDEYE
+    trading_pair: str = "SOL-PERP"
     market_address: str = "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs"  # Mango SOL-PERP
     interval: CandleInterval = CandleInterval.FIFTEEN_MINUTES
     start_time: int = int(time.time()) - 60 * 60 * 24 * 7 # 1 week
