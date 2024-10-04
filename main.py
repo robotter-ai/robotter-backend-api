@@ -11,6 +11,8 @@ from starlette.responses import JSONResponse, RedirectResponse
 
 import routers.instances
 import routers.strategies
+import routers.market_data
+import routers.backtest
 
 load_dotenv()
 
@@ -45,6 +47,8 @@ async def validation_exception_handler(request, exc):
 
 app.include_router(routers.instances.router)
 app.include_router(routers.strategies.router)
+app.include_router(routers.market_data.router)
+app.include_router(routers.backtest.router)
 app.include_router(authorization_routes)
 
 @app.get("/")
