@@ -1,15 +1,13 @@
-from typing import Dict, Union
-
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from hummingbot.data_feed.candles_feed.candles_factory import CandlesFactory
 from hummingbot.strategy_v2.backtesting.backtesting_engine_base import BacktestingEngineBase
 from hummingbot.strategy_v2.backtesting.controllers_backtesting.directional_trading_backtesting import (
     DirectionalTradingBacktesting,
 )
 from hummingbot.strategy_v2.backtesting.controllers_backtesting.market_making_backtesting import MarketMakingBacktesting
-from pydantic import BaseModel
 
 from config import CONTROLLERS_MODULE, CONTROLLERS_PATH
+from routers.backtest_models import BacktestResponse, BacktestResults, BacktestingConfig, ExecutorInfo, ProcessedData
 
 router = APIRouter(tags=["Market Backtesting"])
 candles_factory = CandlesFactory()
@@ -21,17 +19,8 @@ BACKTESTING_ENGINES = {
     "market_making": market_making_backtesting
 }
 
-
-class BacktestingConfig(BaseModel):
-    start_time: int = 1672542000  # 2023-01-01 00:00:00
-    end_time: int = 1672628400  # 2023-01-01 23:59:00
-    backtesting_resolution: str = "1m"
-    trade_cost: float = 0.0006
-    config: Union[Dict, str]
-
-
-@router.post("/backtest")
-async def run_backtesting(backtesting_config: BacktestingConfig):
+@router.post("/backtest", response_model=BacktestResponse)
+async def run_backtesting(backtesting_config: BacktestingConfig) -> BacktestResponse:
     try:
         if isinstance(backtesting_config.config, str):
             controller_config = BacktestingEngineBase.get_controller_config_instance_from_yml(
@@ -51,15 +40,16 @@ async def run_backtesting(backtesting_config: BacktestingConfig):
             controller_config=controller_config, trade_cost=backtesting_config.trade_cost,
             start=int(backtesting_config.start_time), end=int(backtesting_config.end_time),
             backtesting_resolution=backtesting_config.backtesting_resolution)
-        processed_data = backtesting_results["processed_data"]["features"].fillna(0)
-        executors_info = [e.to_dict() for e in backtesting_results["executors"]]
-        backtesting_results["processed_data"] = processed_data.to_dict()
+        
+        processed_data = backtesting_results["processed_data"]["features"].fillna(0).to_dict()
+        executors_info = [ExecutorInfo(**e.to_dict()) for e in backtesting_results["executors"]]
         results = backtesting_results["results"]
         results["sharpe_ratio"] = results["sharpe_ratio"] if results["sharpe_ratio"] is not None else 0
-        return {
-            "executors": executors_info,
-            "processed_data": backtesting_results["processed_data"],
-            "results": backtesting_results["results"],
-        }
+        
+        return BacktestResponse(
+            executors=executors_info,
+            processed_data=ProcessedData(features=processed_data),
+            results=BacktestResults(**results)
+        )
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=400, detail=str(e))
