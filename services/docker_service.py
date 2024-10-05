@@ -15,6 +15,7 @@ file_system = FileSystemUtil()
 class DockerManager:
     def __init__(self):
         self.SOURCE_PATH = os.getcwd()
+        self.setup_hummingbot_config()
         try:
             self.client = docker.from_env()
         except DockerException as e:
@@ -163,3 +164,17 @@ class DockerManager:
             return {"success": True, "message": f"Instance {instance_name} created successfully."}
         except docker.errors.DockerException as e:
             return {"success": False, "message": str(e)}
+
+    def setup_hummingbot_config(self):
+        config_dir = "/opt/conda/envs/backend-api/lib/python3.10/site-packages/conf"
+        os.makedirs(config_dir, exist_ok=True)
+        
+        config_file = os.path.join(config_dir, "conf_client.yml")
+        if not os.path.exists(config_file):
+            with open(config_file, "w") as f:
+                f.write("instance_id: default\n")
+                f.write("log_level: INFO\n")
+                # Add other necessary default configurations
+
+        # Set the HUMMINGBOT_CONFIG_PATH environment variable
+        os.environ["HUMMINGBOT_CONFIG_PATH"] = config_dir
