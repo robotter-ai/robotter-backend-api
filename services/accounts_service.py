@@ -393,7 +393,7 @@ class AccountsService:
         wallet_address = signing_key.verify_key.encode().hex()
         private_key = signing_key.encode().hex()
         self._save_private_key(account_name, wallet_address, private_key)
-        await self._add_wallet_to_gateway(account_name, wallet_address, private_key)
+        # await self._add_wallet_to_gateway(account_name, wallet_address, private_key)
         self._add_wallet_to_account(account_name, wallet_address)
         return wallet_address
 
@@ -433,6 +433,7 @@ class AccountsService:
         return GatewayHttpClient.get_instance(client_config_adapter)
 
     async def _add_wallet_to_gateway(self, account_name: str, wallet_address: str, private_key: str):
+        # TODO: FIX the /backend/api/certs/ca_cert.pem path
         gateway_client = self.get_gateway_client(account_name)
         
         # Assuming there's a method to add a Solana wallet to the gateway
