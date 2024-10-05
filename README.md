@@ -21,6 +21,10 @@ Backend-api is a dedicated solution for managing Hummingbot instances. It offers
    conda activate backend-api
    ```
 
+
+### Setup .env
+Just copy and rename `default.env` to `.env`.
+
 ### Running the API with Conda
 Run the API using uvicorn with the following command:
    ```bash

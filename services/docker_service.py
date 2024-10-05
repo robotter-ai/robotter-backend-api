@@ -119,13 +119,19 @@ class DockerManager:
 
         environment = {
             "CONFIG_PASSWORD": os.environ.get('CONFIG_PASSWORD'),
-            "GATEWAY_CERT_PATH": "/certs/gateway_cert.pem",
+            "GATEWAY_CERT_PATH": os.environ.get('GATEWAY_CERT_PATH'),
             "GATEWAY_CERT_PASSPHRASE": os.environ.get('GATEWAY_CERT_PASSPHRASE'),
+            "GATEWAY_HOST": os.environ.get('GATEWAY_HOST', 'gateway'),
+            "GATEWAY_PORT": os.environ.get('GATEWAY_PORT', '15888'),
+            "CERTS_PATH": os.environ.get('GATEWAY_CERTS_PATH', '/certs'),
         }
         
+        host_bots_path = os.environ.get('HOST_BOTS_PATH', './bots')
+        host_gateway_certs_path = os.environ.get('HOST_GATEWAY_CERTS_PATH', './certs')
+        
         volumes = {
-            f"{bots_path}/instances/{instance_name}": {"bind": "/conf", "mode": "rw"},
-            "./certs": {"bind": "/certs", "mode": "ro"},
+            f"{host_bots_path}/instances/{instance_name}": {"bind": "/conf", "mode": "rw"},
+            host_gateway_certs_path: {"bind": "/certs", "mode": "ro"},
         }
         
         log_config = LogConfig(
@@ -134,24 +140,22 @@ class DockerManager:
                 'max-size': '10m',
                 'max-file': "5",
             })
-        try:
-            self.client.containers.run(
-                image=config.image,
-                name=instance_name,
-                volumes=volumes,
-                environment=environment,
-                network_mode="host",
-                detach=True,
-                tty=True,
-                stdin_open=True,
-                log_config=log_config,
-            )
-            return {"success": True, "message": f"Instance {instance_name} created successfully."}
-        except docker.errors.DockerException as e:
-            return {"success": False, "message": str(e)}
+        self.client.containers.run(
+            image=config.image,
+            name=instance_name,
+            volumes=volumes,
+            environment=environment,
+            network_mode="host",
+            detach=True,
+            tty=True,
+            stdin_open=True,
+            log_config=log_config,
+        )
+        return {"success": True, "message": f"Instance {instance_name} created successfully."}
+        return {"success": False, "message": str(e)}
 
     def setup_hummingbot_config(self):
-        config_dir = "/opt/conda/envs/backend-api/lib/python3.10/site-packages/conf"
+        config_dir = "/backend-api/conf"
         os.makedirs(config_dir, exist_ok=True)
         
         config_file = os.path.join(config_dir, "conf_client.yml")
