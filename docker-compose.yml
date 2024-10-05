@@ -4,20 +4,27 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./bots:/backend-api/bots
+      - "./bots:/backend-api/bots"
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./certs:/backend-api/certs:ro
-      - ./conf:/backend-api/conf
+      - "./certs:/backend-api/certs:ro"
+      - "./conf:/backend-api/conf"
     env_file:
       - .env
     environment:
       - BROKER_HOST=emqx
       - BROKER_PORT=1883
+      - BOTS_PATH=/backend-api/bots
       - GATEWAY_CERT_PATH=/backend-api/certs/server_cert.pem
       - GATEWAY_CERT_PASSPHRASE=${GATEWAY_CERT_PASSPHRASE}
       - DEFAULT_GATEWAY_CERTS_PATH=/backend-api/certs
       - CONFIG_PASSWORD=${CONFIG_PASSWORD}
+      - CLIENT_CONFIG_PATH=/backend-api/conf/conf_client.yml
       - PYTHONPATH=/backend-api:$PYTHONPATH
+      # Add these new environment variables for Hummingbot instances
+      - GATEWAY_HOST=gateway
+      - GATEWAY_PORT=15888
+      - GATEWAY_CERTS_PATH=/certs
+      - HUMMINGBOT_INSTANCE_TYPE=docker
     networks:
       - emqx-bridge
       - gateway-network
@@ -27,7 +34,7 @@ services:
     ports:
       - "15888:15888"
     volumes:
-      - ./certs:/home/gateway/certs:ro
+      - "./certs:/home/gateway/certs:ro"
     environment:
       - GATEWAY_CERT=/home/gateway/certs/server_cert.pem
       - GATEWAY_KEY=/home/gateway/certs/server_key.pem
