@@ -21,5 +21,7 @@ SHELL ["conda", "run", "-n", "backend-api", "/bin/bash", "-c"]
 # Copy the rest of the application code
 COPY . .
 
+RUN mkdir -p /backend-api/bots/credentials
+
 # The code to run when container is started
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "backend-api", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

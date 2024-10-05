@@ -332,6 +332,8 @@ class AccountsService:
         List all the accounts that are connected to the trading system.
         :return: List of accounts.
         """
+        if not file_system.path_exists('credentials'):
+            return []
         return file_system.list_folders('credentials')
 
     def list_credentials(self, account_name: str):
@@ -386,12 +388,12 @@ class AccountsService:
         self.accounts.pop(account_name)
         self.accounts_state.pop(account_name)
 
-    def generate_bot_wallet(self, account_name: str) -> str:
+    async def generate_bot_wallet(self, account_name: str) -> str:
         signing_key = SigningKey.generate()
         wallet_address = signing_key.verify_key.encode().hex()
         private_key = signing_key.encode().hex()
         self._save_private_key(account_name, wallet_address, private_key)
-        self._add_wallet_to_gateway(wallet_address, private_key)
+        await self._add_wallet_to_gateway(wallet_address, private_key)
         self._add_wallet_to_account(account_name, wallet_address)
         return wallet_address
 
@@ -423,13 +425,13 @@ class AccountsService:
         decrypted = box.decrypt(base64.b64decode(encrypted_private_key))
         return decrypted.decode()
 
-    def _add_wallet_to_gateway(self, wallet_address: str, private_key: str):
+    async def _add_wallet_to_gateway(self, wallet_address: str, private_key: str):
         # Add the wallet to the Hummingbot Gateway
         gateway_client = GatewayHttpClient.get_instance()
         
         # Assuming there's a method to add a Solana wallet to the gateway
         # You may need to adjust this based on the actual Gateway API
-        response = gateway_client.add_wallet(
+        response = await gateway_client.add_wallet(
             chain="solana",
             network="mainnet",
             private_key=private_key,

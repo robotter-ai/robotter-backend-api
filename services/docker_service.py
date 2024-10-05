@@ -117,32 +117,17 @@ class DockerManager:
         client_config['instance_id'] = instance_name
         FileSystemUtil.dump_dict_to_yaml(conf_file_path, client_config)
 
-        # Set up Docker volumes
-        volumes = {
-            os.path.abspath(os.path.join(bots_path, instance_dir, 'conf')): {'bind': '/home/hummingbot/conf', 'mode': 'rw'},
-            os.path.abspath(os.path.join(bots_path, instance_dir, 'conf', 'connectors')): {'bind': '/home/hummingbot/conf/connectors', 'mode': 'rw'},
-            os.path.abspath(os.path.join(bots_path, instance_dir, 'conf', 'scripts')): {'bind': '/home/hummingbot/conf/scripts', 'mode': 'rw'},
-            os.path.abspath(os.path.join(bots_path, instance_dir, 'conf', 'controllers')): {'bind': '/home/hummingbot/conf/controllers', 'mode': 'rw'},
-            os.path.abspath(os.path.join(bots_path, instance_dir, 'data')): {'bind': '/home/hummingbot/data', 'mode': 'rw'},
-            os.path.abspath(os.path.join(bots_path, instance_dir, 'logs')): {'bind': '/home/hummingbot/logs', 'mode': 'rw'},
-            os.path.abspath(os.path.join(bots_path, "bots", 'scripts')): {'bind': '/home/hummingbot/scripts', 'mode': 'rw'},
-            os.path.abspath(os.path.join(bots_path, "bots", 'controllers')): {'bind': '/home/hummingbot/controllers', 'mode': 'rw'},
+        environment = {
+            "CONFIG_PASSWORD": os.environ.get('CONFIG_PASSWORD'),
+            "GATEWAY_CERT_PATH": "/certs/gateway_cert.pem",
+            "GATEWAY_CERT_PASSPHRASE": os.environ.get('GATEWAY_CERT_PASSPHRASE'),
         }
-
-        # Set up environment variables
-        environment = {}
-        password = os.environ.get('CONFIG_PASSWORD', "a")
-        if password:
-            environment["CONFIG_PASSWORD"] = password
-
-        if config.script:
-            if password:
-                environment['CONFIG_FILE_NAME'] = config.script
-                if config.script_config:
-                    environment['SCRIPT_CONFIG'] = config.script_config
-            else:
-                return {"success": False, "message": "Password not provided. We cannot start the bot without a password."}
-
+        
+        volumes = {
+            f"{bots_path}/instances/{instance_name}": {"bind": "/conf", "mode": "rw"},
+            "./certs": {"bind": "/certs", "mode": "ro"},
+        }
+        
         log_config = LogConfig(
             type="json-file",
             config={
