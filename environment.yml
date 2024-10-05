@@ -23,5 +23,5 @@ dependencies:
       - flake8
       - isort
       - pre-commit
-      - fastapi-walletauth==1.2.1
+      - fastapi-walletauth==1.2.3
       - solana

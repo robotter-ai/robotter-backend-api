@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.accounts_service import AccountsService
 from services.docker_service import DockerManager
@@ -19,29 +19,26 @@ class CreateBotRequest(BaseModel):
 
 @router.post("/instances", response_model=InstanceResponse)
 async def create_instance(request: CreateBotRequest, wallet_auth: JWTWalletAuthDep):
-    try:
-        bot_account = f"bot_{request.bot_name}_{wallet_auth.address}"
-        accounts_service.add_account(bot_account)
-        wallet_address = accounts_service.generate_bot_wallet(bot_account)
-        
-        # Save strategy configuration and market
-        accounts_service.save_bot_config(bot_account, request.strategy_name, request.strategy_parameters, request.market)
-        
-        # Create Hummingbot instance
-        instance_config = HummingbotInstanceConfig(
-            instance_name=bot_account,
-            credentials_profile=bot_account,
-            image="mlguys/robotter.ai:latest-hummingbot",
-            market=request.market
-        )
-        result = docker_manager.create_hummingbot_instance(instance_config)
-        
-        if not result["success"]:
-            raise HTTPException(status_code=500, detail=result["message"])
-        
-        return InstanceResponse(instance_id=bot_account, wallet_address=wallet_address, market=request.market)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    bot_account = f"bot_{request.bot_name}_{wallet_auth.address}"
+    accounts_service.add_account(bot_account)
+    wallet_address = await accounts_service.generate_bot_wallet(bot_account)
+    
+    # Save strategy configuration and market
+    accounts_service.save_bot_config(bot_account, request.strategy_name, request.strategy_parameters, request.market)
+    
+    # Create Hummingbot instance
+    instance_config = HummingbotInstanceConfig(
+        instance_name=bot_account,
+        credentials_profile=bot_account,
+        image="mlguys/robotter.ai:latest-hummingbot",
+        market=request.market
+    )
+    result = docker_manager.create_hummingbot_instance(instance_config)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
+    
+    return InstanceResponse(instance_id=bot_account, wallet_address=wallet_address, market=request.market)
 
 @router.get("/instances/{instance_id}/wallet")
 async def get_instance_wallet(instance_id: str, wallet_auth: JWTWalletAuthDep):
