@@ -20,7 +20,7 @@ class SpotPerpArbitrageConfig(ControllerConfigBase):
             prompt_on_new=True
         ))
     spot_trading_pair: str = Field(
-        default="DOGE-USDT",
+        default="DOGE-USDC",
         client_data=ClientFieldData(
             prompt=lambda e: "Enter the spot trading pair: ",
             prompt_on_new=True
@@ -32,7 +32,7 @@ class SpotPerpArbitrageConfig(ControllerConfigBase):
             prompt_on_new=True
         ))
     perp_trading_pair: str = Field(
-        default="DOGE-USDT",
+        default="DOGE-USDC",
         client_data=ClientFieldData(
             prompt=lambda e: "Enter the perp trading pair: ",
             prompt_on_new=True

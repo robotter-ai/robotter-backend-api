@@ -1,88 +1,114 @@
-from decimal import Decimal
-from typing import List
-
-from fastapi import APIRouter, HTTPException
-from fastapi_walletauth import JWTWalletAuthDep
-
-from config import BROKER_HOST, BROKER_PASSWORD, BROKER_PORT, BROKER_USERNAME
-from services.bots_orchestrator import BotsManager
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+from services.accounts_service import AccountsService
 from services.docker_service import DockerManager
-from utils.models import HummingbotInstanceConfig, Instance, InstanceStats, StartStrategyRequest, InstanceResponse
+from fastapi_walletauth import JWTWalletAuthDep
+from utils.models import HummingbotInstanceConfig, StartStrategyRequest, InstanceResponse
+from hummingbot.core.gateway.gateway_http_client import GatewayHttpClient
 
-router = APIRouter(tags=["Instance Management"])
-
+router = APIRouter(tags=["Bot Instance Management"])
+accounts_service = AccountsService()
 docker_manager = DockerManager()
-bots_manager = BotsManager(broker_host=BROKER_HOST, broker_port=BROKER_PORT, 
-                           broker_username=BROKER_USERNAME, broker_password=BROKER_PASSWORD)
+gateway_client = GatewayHttpClient.get_instance()
 
+class CreateBotRequest(BaseModel):
+    bot_name: str
+    strategy_name: str
+    strategy_parameters: dict
+    market: str
 
 @router.post("/instances", response_model=InstanceResponse)
-async def create_instance(wallet_auth: JWTWalletAuthDep):
-    # Create a new Hummingbot instance
-    instance_config = HummingbotInstanceConfig(
-        instance_name=f"instance_{wallet_auth.address}",
-        credentials_profile="master_account",
-        image="hummingbot/hummingbot:latest"
-    )
-    #result = docker_manager.create_hummingbot_instance(instance_config)
-    #if result["success"]:
-    if True:
-        # Generate a wallet address for the instance (this is a placeholder, implement actual wallet generation)
-        wallet_address = wallet_auth.address
-        return InstanceResponse(instance_id=instance_config.instance_name, wallet_address=wallet_address)
-    else:
-        raise HTTPException(status_code=500, detail=result["message"])
+async def create_instance(request: CreateBotRequest, wallet_auth: JWTWalletAuthDep):
+    try:
+        bot_account = f"bot_{request.bot_name}_{wallet_auth.address}"
+        accounts_service.add_account(bot_account)
+        wallet_address = accounts_service.generate_bot_wallet(bot_account)
+        
+        # Save strategy configuration and market
+        accounts_service.save_bot_config(bot_account, request.strategy_name, request.strategy_parameters, request.market)
+        
+        # Create Hummingbot instance
+        instance_config = HummingbotInstanceConfig(
+            instance_name=bot_account,
+            credentials_profile=bot_account,
+            image="mlguys/robotter.ai:latest-hummingbot",
+            market=request.market
+        )
+        result = docker_manager.create_hummingbot_instance(instance_config)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail=result["message"])
+        
+        return InstanceResponse(instance_id=bot_account, wallet_address=wallet_address, market=request.market)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-@router.delete("/instances/{instance_id}")
-async def delete_instance(instance_id: str, wallet_auth: JWTWalletAuthDep):
-    #response = docker_manager.delete_hummingbot_instance(instance_id)
-    #if not response["success"]:
-    #    raise HTTPException(status_code=500, detail=response["message"])
-    return {"status": "success", "message": "Instance deleted successfully"}
+@router.get("/instances/{instance_id}/wallet")
+async def get_instance_wallet(instance_id: str, wallet_auth: JWTWalletAuthDep):
+    try:
+        # Check if the instance belongs to the authenticated user
+        if not instance_id.endswith(wallet_auth.address):
+            raise HTTPException(status_code=403, detail="You don't have permission to access this instance")
+        
+        wallet_address = accounts_service.get_bot_wallet_address(instance_id)
+        return {"wallet_address": wallet_address}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
-@router.get("/instances", response_model=List[Instance])
-async def get_instances():
-    active_containers = docker_manager.get_active_containers()
-    instances = []
-    for container_name in active_containers:
-        status = bots_manager.get_bot_status(container_name)
-        instances.append(Instance(
-            id=container_name,
-            wallet_address="0x1234567890123456789012345678901234567890",  # Placeholder
-            running_status=status["status"] == "running",
-            deployed_strategy=status["performance"].get("strategy", None) if status["status"] == "running" else None
-        ))
-    return instances
-
-@router.get("/instances/{instance_id}/stats", response_model=InstanceStats)
-async def get_instance_stats(instance_id: str, wallet_auth: JWTWalletAuthDep):
-    status = bots_manager.get_bot_status(instance_id)
-    if status["status"] == "error":
-        raise HTTPException(status_code=404, detail="Instance not found")
-    # Extract PNL from the performance data (this is a placeholder, implement actual PNL calculation)
-    pnl = Decimal("0.0")
-    for controller in status["performance"].values():
-        if "performance" in controller and "pnl" in controller["performance"]:
-            pnl += Decimal(str(controller["performance"]["pnl"]))
-    return InstanceStats(pnl=pnl)
-
-#@router.post("/instance", response_model=StartStrategyRequest)
-#async def create_instance(wallet_auth: JWTWalletAuthDep):
-#    #TODO: Return wallet address of bot
-#    return StartStrategyRequest(strategy_name="simple_market_making", parameters={"bid_spread": "float", "ask_spread": "float"})
-
-
-@router.post("/instance/{instance_id}/start")
+@router.post("/instances/{instance_id}/start")
 async def start_instance(instance_id: str, start_request: StartStrategyRequest, wallet_auth: JWTWalletAuthDep):
-    response = bots_manager.start_bot(instance_id, script=start_request.strategy_name, conf=start_request.parameters)
-    if not response:
-        raise HTTPException(status_code=500, detail="Failed to start the instance")
-    return {"status": "success", "message": "Instance started successfully"}
+    try:
+        # Check if the instance belongs to the authenticated user
+        if not instance_id.endswith(wallet_auth.address):
+            raise HTTPException(status_code=403, detail="You don't have permission to start this instance")
+        
+        # Verify Mango account exists
+        mango_account = start_request.parameters.get("mango_account")
+        if not mango_account:
+            raise HTTPException(status_code=400, detail="Mango account address is required")
+        
+        # Check if Mango account exists and is associated with the bot's wallet
+        bot_wallet = accounts_service.get_bot_wallet_address(instance_id)
+        mango_account_info = await gateway_client.get_mango_account(mango_account)
+        
+        if not mango_account_info or mango_account_info.get("owner") != bot_wallet:
+            raise HTTPException(status_code=400, detail="Invalid Mango account or not associated with the bot's wallet")
+        
+        # Start the bot
+        strategy_config = accounts_service.get_strategy_config(instance_id)
+        start_config = {**strategy_config, **start_request.parameters}
+        
+        response = docker_manager.start_bot(instance_id, start_config)
+        if not response["success"]:
+            raise HTTPException(status_code=500, detail="Failed to start the instance")
+        
+        return {"status": "success", "message": "Instance started successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-
-@router.post("/instance/{instance_id}/stop")
+@router.post("/instances/{instance_id}/stop")
 async def stop_instance(instance_id: str, wallet_auth: JWTWalletAuthDep):
-    response = bots_manager.stop_bot(instance_id)
-    if not response:
-        raise HTTPException(status_code=500, detail="Failed to stop the instance")
-    return {"status": "success", "message": "Instance stopped successfully"}
+    try:
+        # Check if the instance belongs to the authenticated user
+        if not instance_id.endswith(wallet_auth.address):
+            raise HTTPException(status_code=403, detail="You don't have permission to stop this instance")
+        
+        # Stop the bot and cancel all orders
+        response = docker_manager.stop_bot(instance_id)
+        if not response["success"]:
+            raise HTTPException(status_code=500, detail="Failed to stop the instance")
+        
+        # Cancel all orders through the gateway
+        bot_wallet = accounts_service.get_bot_wallet_address(instance_id)
+        cancel_orders_response = await gateway_client.clob_perp_get_orders(
+            "solana",
+            "mainnet",
+            "mango"
+        )
+        
+        if not cancel_orders_response["success"]:
+            raise HTTPException(status_code=500, detail="Failed to cancel all orders")
+        
+        return {"status": "success", "message": "Instance stopped and all orders cancelled successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

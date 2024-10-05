@@ -24,3 +24,4 @@ dependencies:
       - isort
       - pre-commit
       - fastapi-walletauth==1.2.1
+      - solana

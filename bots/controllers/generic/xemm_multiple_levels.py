@@ -24,7 +24,7 @@ class XEMMMultipleLevelsConfig(ControllerConfigBase):
             prompt_on_new=True
         ))
     maker_trading_pair: str = Field(
-        default="LBR-USDT",
+        default="LBR-USDC",
         client_data=ClientFieldData(
             prompt=lambda e: "Enter the maker trading pair: ",
             prompt_on_new=True
@@ -36,7 +36,7 @@ class XEMMMultipleLevelsConfig(ControllerConfigBase):
             prompt_on_new=True
         ))
     taker_trading_pair: str = Field(
-        default="LBR-USDT",
+        default="LBR-USDC",
         client_data=ClientFieldData(
             prompt=lambda e: "Enter the taker trading pair: ",
             prompt_on_new=True
