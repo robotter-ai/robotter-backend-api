@@ -12,7 +12,7 @@ dependencies:
   - cython
   - pip
   - pip:
-      - hummingbot
+      - hummingbot==20240828
       - numpy==1.26.4
       - git+https://github.com/felixfontein/docker-py
       - python-dotenv

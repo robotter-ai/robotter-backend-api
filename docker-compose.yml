@@ -6,18 +6,18 @@ services:
     volumes:
       - ./bots:/backend-api/bots
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./certs:/certs:ro
-      - ./conf:/conf:ro
+      - ./certs:/backend-api/certs:ro
+      - ./conf:/backend-api/conf
     env_file:
       - .env
     environment:
       - BROKER_HOST=emqx
       - BROKER_PORT=1883
-      - GATEWAY_CERT_PATH=/certs/server_cert.pem
+      - GATEWAY_CERT_PATH=/backend-api/certs/server_cert.pem
       - GATEWAY_CERT_PASSPHRASE=${GATEWAY_CERT_PASSPHRASE}
-      - DEFAULT_GATEWAY_CERTS_PATH=/certs
+      - DEFAULT_GATEWAY_CERTS_PATH=/backend-api/certs
       - CONFIG_PASSWORD=${CONFIG_PASSWORD}
-      - PYTHONPATH=/backend-api
+      - PYTHONPATH=/backend-api:$PYTHONPATH
     networks:
       - emqx-bridge
       - gateway-network

@@ -44,12 +44,12 @@ app.add_middleware(
 )
 
 
-@app.exception_handler(ValidationError)
-async def validation_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=422,
-        content={"detail": exc.errors()},
-    )
+#@app.exception_handler(ValidationError)
+#async def validation_exception_handler(request, exc):
+#    return JSONResponse(
+#        status_code=422,
+#        content={"detail": exc.errors()},
+#    )
 
 app.include_router(routers.instances.router)
 app.include_router(routers.strategies.router)

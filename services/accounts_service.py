@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import HTTPException
 from hummingbot.client.config.client_config_map import ClientConfigMap
 from hummingbot.client.config.config_crypt import ETHKeyFileSecretManger
-from hummingbot.client.config.config_helpers import ClientConfigAdapter, ReadOnlyClientConfigAdapter, get_connector_class
+from hummingbot.client.config.config_helpers import ClientConfigAdapter, ReadOnlyClientConfigAdapter, get_connector_class, load_client_config_map_from_file
 from hummingbot.client.settings import AllConnectorSettings
 
 from config import BANNED_TOKENS, CONFIG_PASSWORD
@@ -325,7 +325,7 @@ class AccountsService:
         connector_class = get_connector_class(connector_name)
         connector = connector_class(**init_params)
         return connector
-
+    
     @staticmethod
     def list_accounts():
         """
@@ -393,7 +393,7 @@ class AccountsService:
         wallet_address = signing_key.verify_key.encode().hex()
         private_key = signing_key.encode().hex()
         self._save_private_key(account_name, wallet_address, private_key)
-        await self._add_wallet_to_gateway(wallet_address, private_key)
+        await self._add_wallet_to_gateway(account_name, wallet_address, private_key)
         self._add_wallet_to_account(account_name, wallet_address)
         return wallet_address
 
@@ -424,10 +424,16 @@ class AccountsService:
         box = SecretBox(self.secret_key)
         decrypted = box.decrypt(base64.b64decode(encrypted_private_key))
         return decrypted.decode()
+    
+    def get_gateway_client(self, account_name: str):
+        config_map = load_client_config_map_from_file('/backend-api/conf/conf_client.yml')
+        BackendAPISecurity.login_account(account_name=account_name, secrets_manager=self.secrets_manager)
+        client_config_adapter = ClientConfigAdapter(config_map)
 
-    async def _add_wallet_to_gateway(self, wallet_address: str, private_key: str):
-        # Add the wallet to the Hummingbot Gateway
-        gateway_client = GatewayHttpClient.get_instance()
+        return GatewayHttpClient.get_instance(client_config_adapter)
+
+    async def _add_wallet_to_gateway(self, account_name: str, wallet_address: str, private_key: str):
+        gateway_client = self.get_gateway_client(account_name)
         
         # Assuming there's a method to add a Solana wallet to the gateway
         # You may need to adjust this based on the actual Gateway API
