@@ -16,6 +16,13 @@ from utils.file_system import FileSystemUtil
 from utils.models import BackendAPIConfigAdapter
 from utils.security import BackendAPISecurity
 
+import os
+from nacl.secret import SecretBox
+from nacl.utils import random
+from nacl.signing import SigningKey
+from hummingbot.core.gateway.gateway_http_client import GatewayHttpClient
+import base64
+
 file_system = FileSystemUtil()
 
 
@@ -28,7 +35,7 @@ class AccountsService:
 
     def __init__(self,
                  update_account_state_interval_minutes: int = 1,
-                 default_quote: str = "USDT",
+                 default_quote: str = "USDC",
                  account_history_file: str = "account_state_history.json",
                  account_history_dump_interval_minutes: int = 1):
         # TODO: Add database to store the balances of each account each time it is updated.
@@ -43,6 +50,19 @@ class AccountsService:
         self.account_history_dump_interval = account_history_dump_interval_minutes
         self._update_account_state_task: Optional[asyncio.Task] = None
         self._dump_account_state_task: Optional[asyncio.Task] = None
+        # Load or generate a secret key for encryption
+        self.secret_key = self._load_or_generate_secret_key()
+
+    def _load_or_generate_secret_key(self):
+        secret_key_path = "secret_key.txt"
+        if os.path.exists(secret_key_path):
+            with open(secret_key_path, "rb") as f:
+                return f.read()
+        else:
+            secret_key = random(SecretBox.KEY_SIZE)
+            with open(secret_key_path, "wb") as f:
+                f.write(secret_key)
+            return secret_key
 
     def get_accounts_state(self):
         return self.accounts_state
@@ -353,7 +373,7 @@ class AccountsService:
         file_system.create_folder(f'credentials/{account_name}', "connectors")
         for file in files_to_copy:
             file_system.copy_file(f"credentials/master_account/{file}", f"credentials/{account_name}/{file}")
-        self.accounts[account_name] = {}
+        self.accounts[account_name] = {"wallet": None}
         self.accounts_state[account_name] = {}
 
     def delete_account(self, account_name: str):
@@ -365,3 +385,110 @@ class AccountsService:
         file_system.delete_folder('credentials', account_name)
         self.accounts.pop(account_name)
         self.accounts_state.pop(account_name)
+
+    def generate_bot_wallet(self, account_name: str) -> str:
+        signing_key = SigningKey.generate()
+        wallet_address = signing_key.verify_key.encode().hex()
+        private_key = signing_key.encode().hex()
+        self._save_private_key(account_name, wallet_address, private_key)
+        self._add_wallet_to_gateway(wallet_address, private_key)
+        self._add_wallet_to_account(account_name, wallet_address)
+        return wallet_address
+
+    def _save_private_key(self, account_name: str, wallet_address: str, private_key: str):
+        # Encrypt the private key
+        encrypted_private_key = self._encrypt_private_key(private_key)
+        
+        # Prepare the file path
+        credentials_dir = os.path.join("bots", "credentials", account_name)
+        os.makedirs(credentials_dir, exist_ok=True)
+        wallet_path = os.path.join(credentials_dir, "solana")
+        os.makedirs(wallet_path, exist_ok=True)
+        key_file_path = os.path.join(wallet_path, f"{wallet_address}.json")
+        
+        # Save the encrypted private key
+        with open(key_file_path, "w") as f:
+            json.dump(encrypted_private_key, f)
+        
+        # Set restrictive permissions on the file
+        os.chmod(key_file_path, 0o600)
+
+    def _encrypt_private_key(self, private_key: str) -> str:
+        box = SecretBox(self.secret_key)
+        encrypted = box.encrypt(private_key.encode())
+        return base64.b64encode(encrypted).decode()
+
+    def _decrypt_private_key(self, encrypted_private_key: str) -> str:
+        box = SecretBox(self.secret_key)
+        decrypted = box.decrypt(base64.b64decode(encrypted_private_key))
+        return decrypted.decode()
+
+    def _add_wallet_to_gateway(self, wallet_address: str, private_key: str):
+        # Add the wallet to the Hummingbot Gateway
+        gateway_client = GatewayHttpClient.get_instance()
+        
+        # Assuming there's a method to add a Solana wallet to the gateway
+        # You may need to adjust this based on the actual Gateway API
+        response = gateway_client.add_wallet(
+            chain="solana",
+            network="mainnet",
+            private_key=private_key,
+            address=wallet_address
+        )
+        
+        if not response["success"]:
+            raise Exception(f"Failed to add wallet to gateway: {response['message']}")
+    
+    def _add_wallet_to_account(self, account_name: str, wallet_address: str):
+        if account_name not in self.accounts:
+            raise ValueError(f"Account {account_name} does not exist.")
+        self.accounts[account_name]["wallet"] = wallet_address
+        self._save_account_info(account_name)
+
+    def _save_account_info(self, account_name: str):
+        account_info_path = f"bots/credentials/{account_name}/account_info.json"
+        with open(account_info_path, "w") as f:
+            json.dump(self.accounts[account_name], f)
+
+    def get_bot_wallet_address(self, account_name: str) -> str:
+        if account_name not in self.accounts or not self.accounts[account_name]["wallet"]:
+            account_info_path = f"bots/credentials/{account_name}/account_info.json"
+            try:
+                with open(account_info_path, "r") as f:
+                    account_info = json.load(f)
+                    self.accounts[account_name] = account_info
+            except FileNotFoundError:
+                raise ValueError(f"No wallet found for bot account: {account_name}")
+        
+        return self.accounts[account_name]["wallet"]
+
+    def get_bot_wallet_private_key(self, credentials_profile: str, wallet_address: str) -> str:
+        wallet_path = os.path.join("bots", "credentials", credentials_profile, "solana")
+        key_file_path = os.path.join(wallet_path, f"{wallet_address}.json")
+        
+        with open(key_file_path, "r") as f:
+            encrypted_private_key = json.load(f)
+        
+        return self._decrypt_private_key(encrypted_private_key)
+
+    def save_bot_config(self, account_name: str, strategy_name: str, parameters: dict, market: str):
+        config_path = f"bots/credentials/{account_name}/bot_config.json"
+        config = {
+            "strategy_name": strategy_name,
+            "parameters": parameters,
+            "market": market
+        }
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+    def get_bot_config(self, account_name: str):
+        config_path = f"bots/credentials/{account_name}/bot_config.json"
+        try:
+            with open(config_path, "r") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            raise ValueError(f"No configuration found for bot account: {account_name}")
+
+    def get_bot_market(self, account_name: str):
+        config = self.get_bot_config(account_name)
+        return config["market"]

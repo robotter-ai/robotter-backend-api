@@ -146,3 +146,4 @@ class StartStrategyRequest(BaseModel):
 class InstanceResponse(BaseModel):
     instance_id: str
     wallet_address: str
+    market: str
