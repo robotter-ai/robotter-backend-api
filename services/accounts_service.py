@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
+import base58
 from fastapi import HTTPException
 from hummingbot.client.config.client_config_map import ClientConfigMap
 from hummingbot.client.config.config_crypt import ETHKeyFileSecretManger
@@ -390,7 +391,7 @@ class AccountsService:
 
     async def generate_bot_wallet(self, account_name: str) -> str:
         signing_key = SigningKey.generate()
-        wallet_address = signing_key.verify_key.encode().hex()
+        wallet_address = base58.b58encode(signing_key.verify_key.encode()).decode()
         private_key = signing_key.encode().hex()
         self._save_private_key(account_name, wallet_address, private_key)
         # await self._add_wallet_to_gateway(account_name, wallet_address, private_key)
