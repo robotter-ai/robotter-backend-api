@@ -13,7 +13,6 @@ gateway_client = GatewayHttpClient.get_instance()
 
 
 class CreateBotRequest(BaseModel):
-    bot_name: str
     strategy_name: str
     strategy_parameters: dict
     market: str
@@ -21,7 +20,7 @@ class CreateBotRequest(BaseModel):
 
 @router.post("/instances", response_model=InstanceResponse)
 async def create_instance(request: CreateBotRequest, wallet_auth: JWTWalletAuthDep):
-    bot_account = f"bot_{request.bot_name}_{wallet_auth.address}"
+    bot_account = f"robotter_{wallet_auth.address}_{request.market}_{request.strategy_name}"
     accounts_service.add_account(bot_account)
     wallet_address = await accounts_service.generate_bot_wallet(bot_account)
 
