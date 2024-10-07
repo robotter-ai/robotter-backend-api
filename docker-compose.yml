@@ -8,6 +8,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - "./certs:/backend-api/certs:ro"
       - "./conf:/backend-api/conf"
+      # Add this new volume mount
+      - "./conf/conf_client.yml:/opt/conda/envs/backend-api/lib/python3.10/site-packages/conf/conf_client.yml"
     env_file:
       - .env
     environment:
