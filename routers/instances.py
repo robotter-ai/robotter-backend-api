@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from services.accounts_service import AccountsService
+from services.accounts_service import AccountsService, BotConfig
 from services.docker_service import DockerManager
 from fastapi_walletauth import JWTWalletAuthDep
 from utils.models import HummingbotInstanceConfig, StartStrategyRequest, InstanceResponse
