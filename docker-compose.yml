@@ -30,7 +30,7 @@ services:
       - gateway-network
 
   gateway:
-    image: hummingbot/gateway:latest
+    image: mlguys/gateway:mango
     ports:
       - "15888:15888"
     volumes:

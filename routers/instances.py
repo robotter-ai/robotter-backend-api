@@ -29,7 +29,7 @@ async def create_instance(request: CreateBotRequest, wallet_auth: JWTWalletAuthD
 
     # Create Hummingbot instance
     instance_config = HummingbotInstanceConfig(
-        instance_name=bot_account, credentials_profile=bot_account, image="hummingbot/hummingbot:latest", market=request.market
+        instance_name=bot_account, credentials_profile=bot_account, image="mlguys/hummingbot:mango", market=request.market
     )
     result = docker_manager.create_hummingbot_instance(instance_config)
 
