@@ -29,7 +29,7 @@ async def create_instance(request: CreateBotRequest, wallet_auth: JWTWalletAuthD
         strategy_name=request.strategy_name,
         parameters=request.strategy_parameters,
         market=request.market,
-        wallet_address=wallet_address
+        wallet_address=wallet_auth.address
     )
     accounts_service.save_bot_config(bot_account, bot_config)
 
