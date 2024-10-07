@@ -23,9 +23,15 @@ from nacl.utils import random
 from nacl.signing import SigningKey
 from hummingbot.core.gateway.gateway_http_client import GatewayHttpClient
 import base64
+from pydantic import BaseModel
 
 file_system = FileSystemUtil()
 
+class BotConfig(BaseModel):
+    strategy_name: str
+    parameters: dict
+    market: str
+    wallet_address: str
 
 class AccountsService:
     """
@@ -481,24 +487,20 @@ class AccountsService:
         
         return self._decrypt_private_key(encrypted_private_key)
 
-    def save_bot_config(self, account_name: str, strategy_name: str, parameters: dict, market: str):
+    def save_bot_config(self, account_name: str, config: BotConfig):
         config_path = f"bots/credentials/{account_name}/bot_config.json"
-        config = {
-            "strategy_name": strategy_name,
-            "parameters": parameters,
-            "market": market
-        }
         with open(config_path, "w") as f:
-            json.dump(config, f)
+            json.dump(config.dict(), f)
 
-    def get_bot_config(self, account_name: str):
+    def get_bot_config(self, account_name: str) -> BotConfig:
         config_path = f"bots/credentials/{account_name}/bot_config.json"
         try:
             with open(config_path, "r") as f:
-                return json.load(f)
+                config_data = json.load(f)
+                return BotConfig(**config_data)
         except FileNotFoundError:
             raise ValueError(f"No configuration found for bot account: {account_name}")
 
     def get_bot_market(self, account_name: str):
         config = self.get_bot_config(account_name)
-        return config["market"]
+        return config.market
