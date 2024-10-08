@@ -59,6 +59,9 @@ class AccountsService:
         self._dump_account_state_task: Optional[asyncio.Task] = None
         # Load or generate a secret key for encryption
         self.secret_key = self._load_or_generate_secret_key()
+        if BackendAPISecurity.new_password_required():
+            print("New password required")
+            BackendAPISecurity.store_password_verification(self.secrets_manager)
 
     def _load_or_generate_secret_key(self):
         secret_key_path = "secret_key.txt"
@@ -433,7 +436,9 @@ class AccountsService:
         return decrypted.decode()
     
     def get_gateway_client(self, account_name: str):
-        config_map = load_client_config_map_from_file('/backend-api/conf/conf_client.yml')
+        from hummingbot.client.settings import CLIENT_CONFIG_PATH
+        print(CLIENT_CONFIG_PATH)
+        config_map = load_client_config_map_from_file()
         BackendAPISecurity.login_account(account_name=account_name, secrets_manager=self.secrets_manager)
         client_config_adapter = ClientConfigAdapter(config_map)
 

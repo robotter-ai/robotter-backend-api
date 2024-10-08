@@ -1,26 +1,28 @@
 import sys
 import os
 
+from dotenv import load_dotenv
+from utils.conf import load_environment_variables
+
+load_dotenv()
+load_environment_variables()
+
 # Add the project root directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import logging
 
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 import os
 from fastapi_walletauth import jwt_authorization_router as authorization_routes
-from pydantic import ValidationError
 from starlette.responses import JSONResponse, RedirectResponse
 
 import routers.instances
 import routers.strategies
 import routers.market_data
 import routers.backtest
-
-load_dotenv()
 
 logger = (
     logging.getLogger(__name__)
