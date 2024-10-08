@@ -119,9 +119,8 @@ def get_all_strategy_maps() -> Dict[str, Dict[str, StrategyParameter]]:
                             strategy_name = obj.controller_name if hasattr(obj, 'controller_name') else name.lower()
                             parameters = {}
                             for field_name, field in obj.__fields__.items():
-                                if field_name not in ['id', 'controller_name', 'controller_type']:
-                                    param = convert_to_strategy_parameter(field_name, field)
-                                    parameters[field_name] = param
+                                param = convert_to_strategy_parameter(field_name, field)
+                                parameters[field_name] = param
                             
                             strategy_maps[strategy_name] = parameters
                 except ImportError as e:
