@@ -130,5 +130,4 @@ def get_all_strategy_maps() -> Dict[str, Dict[str, StrategyParameter]]:
                     print(f"Unexpected error processing {module_path}: {e}")
                     import traceback
                     traceback.print_exc()
-    print(f"strategy_maps: {len(strategy_maps)}")
     return strategy_maps
