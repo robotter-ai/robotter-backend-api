@@ -58,6 +58,9 @@ services:
       - RPC_KEY=${TRANSACTION_SERVICE_RPC_KEY}
       - WEBHOOK_ID=${TRANSACTION_SERVICE_WEBHOOK_ID}
       - RPC_LANDER=${TRANSACTION_SERVICE_RPC_LANDER}
+    networks:
+      - emqx-bridge
+      - gateway-network
 
   emqx:
     container_name: hummingbot-broker
