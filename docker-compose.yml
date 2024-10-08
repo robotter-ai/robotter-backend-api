@@ -1,6 +1,7 @@
 services:
   backend-api:
     build: .
+    restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
@@ -33,6 +34,7 @@ services:
 
   gateway:
     image: mlguys/gateway:mango
+    restart: unless-stopped
     ports:
       - "15888:15888"
     volumes:
@@ -44,6 +46,18 @@ services:
       - CERTS_PATH=/home/gateway/certs
     networks:
       - gateway-network
+  
+  transaction-service:
+    image: ricardocr987/mango-server:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - RPC_KEY=${TRANSACTION_SERVICE_RPC_KEY}
+      - WEBHOOK_ID=${TRANSACTION_SERVICE_WEBHOOK_ID}
+      - RPC_LANDER=${TRANSACTION_SERVICE_RPC_LANDER}
 
   emqx:
     container_name: hummingbot-broker
