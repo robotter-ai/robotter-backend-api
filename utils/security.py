@@ -1,6 +1,7 @@
+import os
 from pathlib import Path
 
-from hummingbot.client.config.config_crypt import PASSWORD_VERIFICATION_WORD, BaseSecretsManager
+import hummingbot.client.config.config_crypt as config_crypt
 from hummingbot.client.config.config_helpers import (
     ClientConfigAdapter,
     _load_yml_data_into_map,
@@ -20,7 +21,7 @@ class BackendAPISecurity(Security):
     fs_util = FileSystemUtil(base_path="bots/credentials")
 
     @classmethod
-    def login_account(cls, account_name: str, secrets_manager: BaseSecretsManager) -> bool:
+    def login_account(cls, account_name: str, secrets_manager: config_crypt.BaseSecretsManager) -> bool:
         if not cls.validate_password(secrets_manager):
             return False
         cls.secrets_manager = secrets_manager
@@ -66,18 +67,18 @@ class BackendAPISecurity(Security):
         return not PASSWORD_VERIFICATION_PATH.exists()
 
     @staticmethod
-    def store_password_verification(secrets_manager: BaseSecretsManager):
-        encrypted_word = secrets_manager.encrypt_secret_value(PASSWORD_VERIFICATION_WORD, PASSWORD_VERIFICATION_WORD)
+    def store_password_verification(secrets_manager: config_crypt.BaseSecretsManager):
+        encrypted_word = secrets_manager.encrypt_secret_value(config_crypt.PASSWORD_VERIFICATION_WORD, config_crypt.PASSWORD_VERIFICATION_WORD)
         FileSystemUtil.ensure_file_and_dump_text(PASSWORD_VERIFICATION_PATH, encrypted_word)
 
     @staticmethod
-    def validate_password(secrets_manager: BaseSecretsManager) -> bool:
+    def validate_password(secrets_manager: config_crypt.BaseSecretsManager) -> bool:
         valid = False
         with open(PASSWORD_VERIFICATION_PATH, "r") as f:
             encrypted_word = f.read()
         try:
-            decrypted_word = secrets_manager.decrypt_secret_value(PASSWORD_VERIFICATION_WORD, encrypted_word)
-            valid = decrypted_word == PASSWORD_VERIFICATION_WORD
+            decrypted_word = secrets_manager.decrypt_secret_value(config_crypt.PASSWORD_VERIFICATION_WORD, encrypted_word)
+            valid = decrypted_word == config_crypt.PASSWORD_VERIFICATION_WORD
         except ValueError as e:
             if str(e) != "MAC mismatch":
                 raise e

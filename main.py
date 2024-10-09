@@ -1,34 +1,36 @@
 import sys
 import os
 
+from construct import ValidationError
 from dotenv import load_dotenv
+from fastapi.responses import JSONResponse
 from utils.conf import load_environment_variables
-
-load_dotenv()
-load_environment_variables()
 
 # Add the project root directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+load_dotenv()
+load_environment_variables()
+
 import logging
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer
-import os
-from fastapi_walletauth import jwt_authorization_router as authorization_routes
-from starlette.responses import JSONResponse, RedirectResponse
-
-import routers.instances
-import routers.strategies
-import routers.market_data
-import routers.backtest
 
 logger = (
     logging.getLogger(__name__)
     if __name__ != "__main__"
     else logging.getLogger("uvicorn")
 )
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer
+import os
+from fastapi_walletauth import jwt_authorization_router as authorization_routes
+from starlette.responses import RedirectResponse
+
+import routers.instances
+import routers.strategies
+import routers.market_data
+import routers.backtest
 app = FastAPI()
 
 os.environ['FASTAPI_WALLETAUTH_APP'] = 'robotter-ai'
@@ -46,12 +48,12 @@ app.add_middleware(
 )
 
 
-#@app.exception_handler(ValidationError)
-#async def validation_exception_handler(request, exc):
-#    return JSONResponse(
-#        status_code=422,
-#        content={"detail": exc.errors()},
-#    )
+@app.exception_handler(ValidationError)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
 
 app.include_router(routers.instances.router)
 app.include_router(routers.strategies.router)

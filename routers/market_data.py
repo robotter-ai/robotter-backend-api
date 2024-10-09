@@ -70,13 +70,8 @@ async def get_historical_candles(config: HistoricalCandlesConfig) -> HistoricalC
     
 
 @router.get("/markets")
-async def get_markets(account_name: str = "master_account"):
-    gateway_client = accounts_service.get_gateway_client(account_name)
-    response = await gateway_client.get_clob_markets("mango_perpetual_solana_mainnet-beta", "solana", "mainnet")
-    print(response)
-    
-    if response.get("success"):
-        markets = response.get("markets", [])
-        return {"markets": markets}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to fetch Mango markets from gateway")
+async def get_markets():
+    accounts_service = AccountsService()
+    async with accounts_service.get_gateway_client() as gateway_client:
+        response = await gateway_client.get_clob_markets("mango_perpetual_solana_mainnet-beta", "solana", "mainnet")
+    return response

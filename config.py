@@ -1,10 +1,6 @@
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 CONTROLLERS_PATH = "bots/conf/controllers"
 CONTROLLERS_MODULE = "bots.controllers"
 CONFIG_PASSWORD = os.getenv("CONFIG_PASSWORD", "a")

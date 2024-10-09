@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from hummingbot.client.config.client_config_map import ClientConfigMap
 from hummingbot.client.config.config_crypt import ETHKeyFileSecretManger
 from hummingbot.client.config.config_helpers import ClientConfigAdapter, ReadOnlyClientConfigAdapter, get_connector_class, load_client_config_map_from_file
-from hummingbot.client.settings import AllConnectorSettings
+from hummingbot.client.settings import AllConnectorSettings, CONF_DIR_PATH
 
 from config import BANNED_TOKENS, CONFIG_PASSWORD
 from utils.file_system import FileSystemUtil
@@ -21,9 +21,9 @@ import os
 from nacl.secret import SecretBox
 from nacl.utils import random
 from nacl.signing import SigningKey
-from hummingbot.core.gateway.gateway_http_client import GatewayHttpClient
 import base64
 from pydantic import BaseModel
+from utils.gateway import CustomGatewayHttpClient
 
 file_system = FileSystemUtil()
 
@@ -46,6 +46,8 @@ class AccountsService:
                  account_history_file: str = "account_state_history.json",
                  account_history_dump_interval_minutes: int = 1):
         # TODO: Add database to store the balances of each account each time it is updated.
+        print("conf passw", CONFIG_PASSWORD)
+        print("conf path", CONF_DIR_PATH)
         self.secrets_manager = ETHKeyFileSecretManger(CONFIG_PASSWORD)
         self.accounts = {}
         self.accounts_state = {}
@@ -62,6 +64,9 @@ class AccountsService:
         if BackendAPISecurity.new_password_required():
             print("New password required")
             BackendAPISecurity.store_password_verification(self.secrets_manager)
+        else:
+            print("Password already set")
+        BackendAPISecurity.secrets_manager = self.secrets_manager
 
     def _load_or_generate_secret_key(self):
         secret_key_path = "secret_key.txt"
@@ -403,7 +408,7 @@ class AccountsService:
         wallet_address = base58.b58encode(signing_key.verify_key.encode()).decode()
         private_key = signing_key.encode().hex()
         self._save_private_key(account_name, wallet_address, private_key)
-        # await self._add_wallet_to_gateway(account_name, wallet_address, private_key)
+        await self._add_wallet_to_gateway(account_name, wallet_address, private_key)
         self._add_wallet_to_account(account_name, wallet_address)
         return wallet_address
 
@@ -435,14 +440,14 @@ class AccountsService:
         decrypted = box.decrypt(base64.b64decode(encrypted_private_key))
         return decrypted.decode()
     
-    def get_gateway_client(self, account_name: str):
-        from hummingbot.client.settings import CLIENT_CONFIG_PATH
-        print(CLIENT_CONFIG_PATH)
+    def get_gateway_client(self, account_name: Optional[str] = None):
         config_map = load_client_config_map_from_file()
-        BackendAPISecurity.login_account(account_name=account_name, secrets_manager=self.secrets_manager)
+        if account_name is None:
+            BackendAPISecurity.login(secrets_manager=self.secrets_manager)
+        else:
+            BackendAPISecurity.login_account(account_name=account_name, secrets_manager=self.secrets_manager)
         client_config_adapter = ClientConfigAdapter(config_map)
-
-        return GatewayHttpClient.get_instance(client_config_adapter)
+        return CustomGatewayHttpClient(client_config_adapter, self.secrets_manager)
 
     async def _add_wallet_to_gateway(self, account_name: str, wallet_address: str, private_key: str):
         # TODO: FIX the /backend/api/certs/ca_cert.pem path
