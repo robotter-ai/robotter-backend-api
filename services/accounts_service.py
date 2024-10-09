@@ -408,7 +408,7 @@ class AccountsService:
         wallet_address = base58.b58encode(signing_key.verify_key.encode()).decode()
         private_key = signing_key.encode().hex()
         self._save_private_key(account_name, wallet_address, private_key)
-        await self._add_wallet_to_gateway(account_name, wallet_address, private_key)
+        # await self._add_wallet_to_gateway(account_name, wallet_address, private_key)
         self._add_wallet_to_account(account_name, wallet_address)
         return wallet_address
 
