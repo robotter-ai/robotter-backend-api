@@ -2,6 +2,10 @@ from hummingbot.core.gateway.gateway_http_client import GatewayHttpClient
 from hummingbot.client.config.security import Security
 from hummingbot.client.config.config_helpers import ClientConfigAdapter
 
+from utils.conf import load_environment_variables
+
+load_environment_variables()
+
 class CustomGatewayHttpClient:
     def __init__(self, client_config_map: ClientConfigAdapter, secrets_manager):
         self.client_config_map = client_config_map

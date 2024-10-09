@@ -8,7 +8,7 @@ from utils.conf import load_environment_variables
 
 # Add the project root directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+import hummingbot.client.settings  # load once to set hummingbot config
 load_dotenv()
 load_environment_variables()
 
