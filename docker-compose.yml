@@ -49,6 +49,8 @@ services:
   
   transaction-service:
     image: ricardocr987/mango-server:latest
+    volumes:
+      - "./solana:/app/data"
     restart: unless-stopped
     ports:
       - "3000:3000"
