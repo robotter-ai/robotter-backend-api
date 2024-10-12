@@ -20,6 +20,7 @@ services:
       - GATEWAY_CERT_PATH=/backend-api/certs/server_cert.pem
       - GATEWAY_CERT_PASSPHRASE=${GATEWAY_CERT_PASSPHRASE}
       - DEFAULT_GATEWAY_CERTS_PATH=/backend-api/certs
+      - PASSWORD_VERIFICATION_PATH=/backend-api/conf/.password_verification
       - CONFIG_PASSWORD=${CONFIG_PASSWORD}
       - CLIENT_CONFIG_PATH=/backend-api/conf/conf_client.yml
       - PYTHONPATH=/backend-api:$PYTHONPATH
@@ -40,8 +41,8 @@ services:
     volumes:
       - "./certs:/home/gateway/certs:ro"
     environment:
-      - GATEWAY_CERT=/home/gateway/certs/server_cert.pem
-      - GATEWAY_KEY=/home/gateway/certs/server_key.pem
+      - GATEWAY_CERT=/home/gateway/certs/gateway_cert.pem
+      - GATEWAY_KEY=/home/gateway/certs/gateway_key.pem
       - GATEWAY_PASSPHRASE=${GATEWAY_CERT_PASSPHRASE}
       - CERTS_PATH=/home/gateway/certs
     networks:
