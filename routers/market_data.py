@@ -1,9 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter
 from hummingbot.data_feed.candles_feed.candles_factory import CandlesConfig, CandlesFactory
 import aiohttp
 import os
 from dotenv import load_dotenv
-import numpy as np
 from services.accounts_service import AccountsService
 
 from .market_data_models import CandleConnector, HistoricalCandlesConfig, HistoricalCandlesResponse, CandleData
