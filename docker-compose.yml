@@ -80,19 +80,19 @@ services:
       - emqx-log:/opt/emqx/log
       - emqx-etc:/opt/emqx/etc
     ports:
-      - "1883:1883"  # mqtt:tcp
-      - "8883:8883"  # mqtt:tcp:ssl
-      - "8083:8083"  # mqtt:ws
-      - "8084:8084"  # mqtt:ws:ssl
-      - "8081:8081"  # http:management
-      - "18083:18083"  # http:dashboard
-      - "61613:61613"  # web-stomp gateway
+      - "1883:1883" # mqtt:tcp
+      - "8883:8883" # mqtt:tcp:ssl
+      - "8083:8083" # mqtt:ws
+      - "8084:8084" # mqtt:ws:ssl
+      - "8081:8081" # http:management
+      - "18083:18083" # http:dashboard
+      - "61613:61613" # web-stomp gateway
     networks:
       emqx-bridge:
         aliases:
           - node1.emqx.local
     healthcheck:
-      test: [ "CMD", "/opt/emqx/bin/emqx_ctl", "status" ]
+      test: ["CMD", "/opt/emqx/bin/emqx_ctl", "status"]
       interval: 5s
       timeout: 25s
       retries: 5
@@ -104,6 +104,6 @@ networks:
     driver: bridge
 
 volumes:
-  emqx-data: { }
-  emqx-log: { }
-  emqx-etc: { }
+  emqx-data: {}
+  emqx-log: {}
+  emqx-etc: {}

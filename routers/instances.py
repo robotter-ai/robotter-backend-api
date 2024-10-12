@@ -32,7 +32,6 @@ async def create_instance(request: CreateBotRequest, wallet_auth: JWTWalletAuthD
         wallet_address=wallet_auth.address
     )
     accounts_service.save_bot_config(bot_account, bot_config)
-
     # Create Hummingbot instance
     instance_config = HummingbotInstanceConfig(
         instance_name=bot_account, credentials_profile=bot_account, image="mlguys/hummingbot:mango", market=request.market
