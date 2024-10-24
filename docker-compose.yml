@@ -27,28 +27,26 @@ services:
       # Add these new environment variables for Hummingbot instances
       - GATEWAY_HOST=gateway
       - GATEWAY_PORT=15888
-      - GATEWAY_CERTS_PATH=/certs
+      - GATEWAY_CERTS_PATH=./certs
       - HUMMINGBOT_INSTANCE_TYPE=docker
     networks:
       - emqx-bridge
       - gateway-network
 
   gateway:
-    image: mlguys/gateway:mango-markets-latest
+    image: hummingbot/gateway:mango-markets-latest
     restart: unless-stopped
     ports:
       - "15888:15888"
       - "8080:8080"
     volumes:
       - "./certs:/home/gateway/certs:ro"
+      - "./conf:/home/gateway/conf"
     environment:
-      - GATEWAY_CERT=/home/gateway/certs/gateway_cert.pem
-      - GATEWAY_KEY=/home/gateway/certs/gateway_key.pem
       - GATEWAY_PASSPHRASE=${GATEWAY_CERT_PASSPHRASE}
-      - CERTS_PATH=/home/gateway/certs
     networks:
       - gateway-network
-  
+
   transaction-service:
     image: ricardocr987/mango-server:latest
     volumes:

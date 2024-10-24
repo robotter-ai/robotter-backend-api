@@ -23,9 +23,11 @@ class DockerManager:
 
     def get_active_containers(self):
         try:
-            containers_info = [{"id": container.id, "name": container.name, "status": container.status} for
-                               container in self.client.containers.list(filters={"status": "running"}) if
-                               "hummingbot" in container.name and "broker" not in container.name]
+            containers_info = [
+                {"id": container.id, "name": container.name, "status": container.status}
+                for container in self.client.containers.list(filters={"status": "running"})
+                if "hummingbot" in container.name and "broker" not in container.name
+            ]
             return {"active_instances": containers_info}
         except DockerException as e:
             return str(e)
@@ -45,9 +47,11 @@ class DockerManager:
 
     def get_exited_containers(self):
         try:
-            containers_info = [{"id": container.id, "name": container.name, "status": container.status} for
-                               container in self.client.containers.list(filters={"status": "exited"}) if
-                               "hummingbot" in container.name and "broker" not in container.name]
+            containers_info = [
+                {"id": container.id, "name": container.name, "status": container.status}
+                for container in self.client.containers.list(filters={"status": "exited"})
+                if "hummingbot" in container.name and "broker" not in container.name
+            ]
             return {"exited_instances": containers_info}
         except DockerException as e:
             return str(e)
@@ -88,58 +92,77 @@ class DockerManager:
             return {"success": False, "message": str(e)}
 
     def create_hummingbot_instance(self, config: HummingbotInstanceConfig):
-        bots_path = os.environ.get('HOST_BOTS_PATH', self.SOURCE_PATH)
+        bots_path = os.environ.get("HOST_BOTS_PATH", self.SOURCE_PATH)
         instance_name = f"hummingbot-{config.instance_name}"
-        instance_dir = os.path.join(bots_path, "bots", 'instances', instance_name)
-        if not os.path.exists(instance_dir):
-            os.makedirs(instance_dir)
-            os.makedirs(os.path.join(instance_dir, 'data'))
-            os.makedirs(os.path.join(instance_dir, 'logs'))
 
         # Copy credentials to instance directory
-        source_credentials_dir = os.path.join("bots", 'credentials', config.credentials_profile)
-        script_config_dir = os.path.join("bots", 'conf', 'scripts')
-        controllers_config_dir = os.path.join("bots", 'conf', 'controllers')
-        destination_credentials_dir = os.path.join(instance_dir, 'conf')
-        destination_scripts_config_dir = os.path.join(instance_dir, 'conf', 'scripts')
-        destination_controllers_config_dir = os.path.join(instance_dir, 'conf', 'controllers')
+        instance_to_copy_dir = os.path.join("bots", "instances", instance_name)
+
+        if not os.path.exists(instance_to_copy_dir):
+            os.makedirs(instance_to_copy_dir)
+            os.makedirs(os.path.join(instance_to_copy_dir, "data"))
+            os.makedirs(os.path.join(instance_to_copy_dir, "logs"))
+
+        source_credentials_dir = os.path.join("bots", "credentials", config.credentials_profile)
+        script_config_dir = os.path.join("bots", "conf", "scripts")
+        controllers_config_dir = os.path.join("bots", "conf", "controllers")
+        destination_credentials_dir = os.path.join(instance_to_copy_dir, "conf")
+        destination_scripts_config_dir = os.path.join(instance_to_copy_dir, "conf", "scripts")
+        destination_controllers_config_dir = os.path.join(instance_to_copy_dir, "conf", "controllers")
 
         # Remove the destination directory if it already exists
         if os.path.exists(destination_credentials_dir):
             shutil.rmtree(destination_credentials_dir)
 
-        # Copy the entire contents of source_credentials_dir to destination_credentials_dir     
+        # Copy the entire contents of source_credentials_dir to destination_credentials_dir
         shutil.copytree(source_credentials_dir, destination_credentials_dir)
         shutil.copytree(script_config_dir, destination_scripts_config_dir)
         shutil.copytree(controllers_config_dir, destination_controllers_config_dir)
-        conf_file_path = f"{instance_dir}/conf/conf_client.yml"
+        conf_file_path = f"{instance_to_copy_dir}/conf/conf_client.yml"
         client_config = FileSystemUtil.read_yaml_file(conf_file_path)
-        client_config['instance_id'] = instance_name
+        client_config["instance_id"] = instance_name
         FileSystemUtil.dump_dict_to_yaml(conf_file_path, client_config)
 
         environment = {
-            "CONFIG_PASSWORD": os.environ.get('CONFIG_PASSWORD'),
-            "GATEWAY_CERT_PATH": os.environ.get('GATEWAY_CERT_PATH'),
-            "GATEWAY_CERT_PASSPHRASE": os.environ.get('GATEWAY_CERT_PASSPHRASE'),
-            "GATEWAY_HOST": os.environ.get('GATEWAY_HOST', 'gateway'),
-            "GATEWAY_PORT": os.environ.get('GATEWAY_PORT', '15888'),
-            "CERTS_PATH": os.environ.get('GATEWAY_CERTS_PATH', '/certs'),
+            "CONFIG_PASSWORD": os.environ.get("CONFIG_PASSWORD"),
+            "DEFAULT_GATEWAY_CERTS_PATH": os.environ.get("GATEWAY_CERTS_PATH", "./certs"),
         }
-        
-        host_bots_path = os.environ.get('HOST_BOTS_PATH', './bots')
-        host_gateway_certs_path = os.environ.get('HOST_GATEWAY_CERTS_PATH', './certs')
-        
+
+        host_gateway_certs_path = os.environ.get("HOST_GATEWAY_CERTS_PATH", "./certs")
+
+        instance_dir = os.path.join(bots_path, "instances", instance_name)
+
         volumes = {
-            f"{host_bots_path}/instances/{instance_name}": {"bind": "/conf", "mode": "rw"},
-            host_gateway_certs_path: {"bind": "/certs", "mode": "ro"},
+            host_gateway_certs_path: {"bind": "/home/hummingbot/certs", "mode": "ro"},
+            os.path.abspath(os.path.join(instance_dir, "conf")): {"bind": "/home/hummingbot/conf", "mode": "rw"},
+            os.path.abspath(os.path.join(instance_dir, "conf", "connectors")): {
+                "bind": "/home/hummingbot/conf/connectors",
+                "mode": "rw",
+            },
+            os.path.abspath(os.path.join(instance_dir, "conf", "scripts")): {
+                "bind": "/home/hummingbot/conf/scripts",
+                "mode": "rw",
+            },
+            os.path.abspath(os.path.join(instance_dir, "conf", "controllers")): {
+                "bind": "/home/hummingbot/conf/controllers",
+                "mode": "rw",
+            },
+            os.path.abspath(os.path.join(instance_dir, "data")): {"bind": "/home/hummingbot/data", "mode": "rw"},
+            os.path.abspath(os.path.join(instance_dir, "logs")): {"bind": "/home/hummingbot/logs", "mode": "rw"},
+            os.path.abspath(os.path.join(bots_path, "scripts")): {"bind": "/home/hummingbot/scripts", "mode": "rw"},
+            os.path.abspath(os.path.join(bots_path, "controllers")): {
+                "bind": "/home/hummingbot/controllers",
+                "mode": "rw",
+            },
         }
-        
+
         log_config = LogConfig(
             type="json-file",
             config={
-                'max-size': '10m',
-                'max-file': "5",
-            })
+                "max-size": "10m",
+                "max-file": "5",
+            },
+        )
         self.client.containers.run(
             image=config.image,
             name=instance_name,
@@ -152,12 +175,11 @@ class DockerManager:
             log_config=log_config,
         )
         return {"success": True, "message": f"Instance {instance_name} created successfully."}
-        return {"success": False, "message": str(e)}
 
     def setup_hummingbot_config(self):
         config_dir = "/backend-api/conf"
         os.makedirs(config_dir, exist_ok=True)
-        
+
         config_file = os.path.join(config_dir, "conf_client.yml")
         if not os.path.exists(config_file):
             with open(config_file, "w") as f:
