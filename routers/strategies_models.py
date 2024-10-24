@@ -49,7 +49,6 @@ def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParam
     
     # structure of field
     client_data = field.field_info.extra.get('client_data')
-    print(client_data)
     if client_data is not None and param.prompt == "":
         desc = client_data.prompt(None) if callable(client_data.prompt) else client_data.prompt
         if desc is not None:
