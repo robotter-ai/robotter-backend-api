@@ -9,7 +9,12 @@ import base58
 from fastapi import HTTPException
 from hummingbot.client.config.client_config_map import ClientConfigMap
 from hummingbot.client.config.config_crypt import ETHKeyFileSecretManger
-from hummingbot.client.config.config_helpers import ClientConfigAdapter, ReadOnlyClientConfigAdapter, get_connector_class, load_client_config_map_from_file
+from hummingbot.client.config.config_helpers import (
+    ClientConfigAdapter,
+    ReadOnlyClientConfigAdapter,
+    get_connector_class,
+    load_client_config_map_from_file,
+)
 from hummingbot.client.settings import AllConnectorSettings, CONF_DIR_PATH
 
 from config import BANNED_TOKENS, CONFIG_PASSWORD
@@ -27,11 +32,13 @@ from utils.gateway import CustomGatewayHttpClient
 
 file_system = FileSystemUtil()
 
+
 class BotConfig(BaseModel):
     strategy_name: str
     parameters: dict
     market: str
     wallet_address: str
+
 
 class AccountsService:
     """
@@ -40,11 +47,13 @@ class AccountsService:
     update the balances of each account.
     """
 
-    def __init__(self,
-                 update_account_state_interval_minutes: int = 1,
-                 default_quote: str = "USDC",
-                 account_history_file: str = "account_state_history.json",
-                 account_history_dump_interval_minutes: int = 1):
+    def __init__(
+        self,
+        update_account_state_interval_minutes: int = 1,
+        default_quote: str = "USDC",
+        account_history_file: str = "account_state_history.json",
+        account_history_dump_interval_minutes: int = 1,
+    ):
         # TODO: Add database to store the balances of each account each time it is updated.
         print("conf passw", CONFIG_PASSWORD)
         print("conf path", CONF_DIR_PATH)
@@ -134,10 +143,8 @@ class AccountsService:
                 logging.error(f"Error dumping account state: {e}")
             finally:
                 now = datetime.now()
-                next_log_time = (now + timedelta(minutes=self.account_history_dump_interval)).replace(second=0,
-                                                                                                      microsecond=0)
-                next_log_time = next_log_time - timedelta(
-                    minutes=next_log_time.minute % self.account_history_dump_interval)
+                next_log_time = (now + timedelta(minutes=self.account_history_dump_interval)).replace(second=0, microsecond=0)
+                next_log_time = next_log_time - timedelta(minutes=next_log_time.minute % self.account_history_dump_interval)
                 sleep_duration = (next_log_time - now).total_seconds()
                 await asyncio.sleep(sleep_duration)
 
@@ -258,8 +265,11 @@ class AccountsService:
             for connector_name, connector in connectors.items():
                 tokens_info = []
                 try:
-                    balances = [{"token": key, "units": value} for key, value in connector.get_all_balances().items() if
-                                value != Decimal("0") and key not in BANNED_TOKENS]
+                    balances = [
+                        {"token": key, "units": value}
+                        for key, value in connector.get_all_balances().items()
+                        if value != Decimal("0") and key not in BANNED_TOKENS
+                    ]
                     unique_tokens = [balance["token"] for balance in balances]
                     trading_pairs = [self.get_default_market(token) for token in unique_tokens if "USD" not in token]
                     last_traded_prices = await self._safe_get_last_traded_prices(connector, trading_pairs)
@@ -270,17 +280,18 @@ class AccountsService:
                         else:
                             market = self.get_default_market(balance["token"])
                             price = Decimal(last_traded_prices.get(market, 0))
-                        tokens_info.append({
-                            "token": balance["token"],
-                            "units": float(balance["units"]),
-                            "price": float(price),
-                            "value": float(price * balance["units"]),
-                            "available_units": float(connector.get_available_balance(balance["token"]))
-                        })
+                        tokens_info.append(
+                            {
+                                "token": balance["token"],
+                                "units": float(balance["units"]),
+                                "price": float(price),
+                                "value": float(price * balance["units"]),
+                                "available_units": float(connector.get_available_balance(balance["token"])),
+                            }
+                        )
                     self.account_state_update_event.set()
                 except Exception as e:
-                    logging.error(
-                        f"Error updating balances for connector {connector_name} in account {account_name}: {e}")
+                    logging.error(f"Error updating balances for connector {connector_name} in account {account_name}: {e}")
                 self.accounts_state[account_name][connector_name] = tokens_info
 
     async def _safe_get_last_traded_prices(self, connector, trading_pairs, timeout=5):
@@ -340,16 +351,16 @@ class AccountsService:
         connector_class = get_connector_class(connector_name)
         connector = connector_class(**init_params)
         return connector
-    
+
     @staticmethod
     def list_accounts():
         """
         List all the accounts that are connected to the trading system.
         :return: List of accounts.
         """
-        if not file_system.path_exists('credentials'):
+        if not file_system.path_exists("credentials"):
             return []
-        return file_system.list_folders('credentials')
+        return file_system.list_folders("credentials")
 
     def list_credentials(self, account_name: str):
         """
@@ -358,8 +369,7 @@ class AccountsService:
         :return: List of credentials.
         """
         try:
-            return [file for file in file_system.list_files(f'credentials/{account_name}/connectors') if
-                    file.endswith('.yml')]
+            return [file for file in file_system.list_files(f"credentials/{account_name}/connectors") if file.endswith(".yml")]
         except FileNotFoundError as e:
             raise HTTPException(status_code=404, detail=str(e))
 
@@ -386,8 +396,8 @@ class AccountsService:
         if account_name in self.accounts:
             raise HTTPException(status_code=400, detail="Account already exists.")
         files_to_copy = ["conf_client.yml", "conf_fee_overrides.yml", "hummingbot_logs.yml", ".password_verification"]
-        file_system.create_folder('credentials', account_name)
-        file_system.create_folder(f'credentials/{account_name}', "connectors")
+        file_system.create_folder("credentials", account_name)
+        file_system.create_folder(f"credentials/{account_name}", "connectors")
         for file in files_to_copy:
             file_system.copy_file(f"credentials/master_account/{file}", f"credentials/{account_name}/{file}")
         self.accounts[account_name] = {"wallet": None}
@@ -399,7 +409,7 @@ class AccountsService:
         :param account_name:
         :return:
         """
-        file_system.delete_folder('credentials', account_name)
+        file_system.delete_folder("credentials", account_name)
         self.accounts.pop(account_name)
         self.accounts_state.pop(account_name)
 
@@ -415,18 +425,18 @@ class AccountsService:
     def _save_private_key(self, account_name: str, wallet_address: str, private_key: str):
         # Encrypt the private key
         encrypted_private_key = self._encrypt_private_key(private_key)
-        
+
         # Prepare the file path
         credentials_dir = os.path.join("bots", "credentials", account_name)
         os.makedirs(credentials_dir, exist_ok=True)
         wallet_path = os.path.join(credentials_dir, "solana")
         os.makedirs(wallet_path, exist_ok=True)
         key_file_path = os.path.join(wallet_path, f"{wallet_address}.json")
-        
+
         # Save the encrypted private key
         with open(key_file_path, "w") as f:
             json.dump(encrypted_private_key, f)
-        
+
         # Set restrictive permissions on the file
         os.chmod(key_file_path, 0o600)
 
@@ -439,7 +449,7 @@ class AccountsService:
         box = SecretBox(self.secret_key)
         decrypted = box.decrypt(base64.b64decode(encrypted_private_key))
         return decrypted.decode()
-    
+
     def get_gateway_client(self, account_name: Optional[str] = None):
         config_map = load_client_config_map_from_file()
         if account_name is None:
@@ -452,19 +462,16 @@ class AccountsService:
     async def _add_wallet_to_gateway(self, account_name: str, wallet_address: str, private_key: str):
         # TODO: FIX the /backend/api/certs/ca_cert.pem path
         gateway_client = self.get_gateway_client(account_name)
-        
+
         # Assuming there's a method to add a Solana wallet to the gateway
         # You may need to adjust this based on the actual Gateway API
         response = await gateway_client.add_wallet(
-            chain="solana",
-            network="mainnet",
-            private_key=private_key,
-            address=wallet_address
+            chain="solana", network="mainnet", private_key=private_key, address=wallet_address
         )
-        
+
         if not response["success"]:
             raise Exception(f"Failed to add wallet to gateway: {response['message']}")
-    
+
     def _add_wallet_to_account(self, account_name: str, wallet_address: str):
         if account_name not in self.accounts:
             raise ValueError(f"Account {account_name} does not exist.")
@@ -485,16 +492,16 @@ class AccountsService:
                     self.accounts[account_name] = account_info
             except FileNotFoundError:
                 raise ValueError(f"No wallet found for bot account: {account_name}")
-        
+
         return self.accounts[account_name]["wallet"]
 
     def get_bot_wallet_private_key(self, credentials_profile: str, wallet_address: str) -> str:
         wallet_path = os.path.join("bots", "credentials", credentials_profile, "solana")
         key_file_path = os.path.join(wallet_path, f"{wallet_address}.json")
-        
+
         with open(key_file_path, "r") as f:
             encrypted_private_key = json.load(f)
-        
+
         return self._decrypt_private_key(encrypted_private_key)
 
     def save_bot_config(self, account_name: str, config: BotConfig):

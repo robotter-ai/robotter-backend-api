@@ -29,7 +29,7 @@ async def create_instance(request: CreateBotRequest, wallet_auth: JWTWalletAuthD
         strategy_name=request.strategy_name,
         parameters=request.strategy_parameters,
         market=request.market,
-        wallet_address=wallet_auth.address
+        wallet_address=wallet_auth.address,
     )
     accounts_service.save_bot_config(bot_account, bot_config)
     # Create Hummingbot instance
@@ -99,9 +99,7 @@ async def stop_instance(instance_id: str, wallet_auth: JWTWalletAuthDep):
 
     # Cancel all orders through the gateway
     bot_wallet = accounts_service.get_bot_wallet_address(instance_id)
-    cancel_orders_response = await gateway_client.clob_perp_get_orders(
-        "solana", "mainnet", "mango_perpetual_solana_mainnet-beta"
-    )
+    cancel_orders_response = await gateway_client.clob_perp_get_orders("solana", "mainnet", "mango_perpetual_solana_mainnet-beta")
 
     if not cancel_orders_response["success"]:
         raise HTTPException(status_code=500, detail="Failed to cancel all orders")
