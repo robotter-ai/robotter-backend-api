@@ -1,7 +1,6 @@
 from enum import Enum
 from typing import Any, Dict, Optional, Union, List
 
-from hummingbot.core.data_type.common import PositionMode
 from pydantic import BaseModel, Field
 from decimal import Decimal
 from hummingbot.strategy_v2.controllers import MarketMakingControllerConfigBase, ControllerConfigBase, DirectionalTradingControllerConfigBase
@@ -35,6 +34,7 @@ class StrategyParameter(BaseModel):
     is_timespan: bool = False
     is_connector: bool = False
     is_trading_pair: bool = False
+    is_integer: bool = False
     display_type: str = Field(default="input", description="Can be 'input', 'slider', 'dropdown', 'toggle', or 'date'")
 
 
@@ -48,11 +48,12 @@ def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParam
     )
     
     # structure of field
-    print(field)
-    if hasattr(field, 'client_data'):
-        client_data = field.client_data
-        if param.prompt == "":
-            param.prompt = client_data.prompt() if callable(client_data.prompt) else client_data.prompt
+    client_data = field.field_info.extra.get('client_data')
+    print(client_data)
+    if client_data is not None and param.prompt == "":
+        desc = client_data.prompt(None) if callable(client_data.prompt) else client_data.prompt
+        if desc is not None:
+            param.prompt = desc
         if not param.required:
             param.required = client_data.prompt_on_new if hasattr(client_data, 'prompt_on_new') else param.required
     param.display_type = "input"
@@ -84,6 +85,12 @@ def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParam
         param.min_value = Decimal(0)
     if any(word in name.lower() for word in ["time", "interval", "duration"]):
         param.is_timespan = True
+        param.min_value = 0
+    if param.type == "int":
+        param.is_integer = True
+    if any(word in name.lower() for word in ["executors", "workers"]):
+        param.display_type = "slider"
+        param.min_value = 1
     try:
         if issubclass(field.type_, Enum):
             param.valid_values = [item.value for item in field.type_]
