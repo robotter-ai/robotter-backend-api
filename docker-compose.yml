@@ -38,6 +38,7 @@ services:
     restart: unless-stopped
     ports:
       - "15888:15888"
+      - "8080:8080"
     volumes:
       - "./certs:/home/gateway/certs:ro"
     environment:
