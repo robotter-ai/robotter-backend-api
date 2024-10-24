@@ -34,10 +34,11 @@ services:
       - gateway-network
 
   gateway:
-    image: hummingbot/gatewaymango-markets-latest
+    image: mlguys/gateway:mango-markets-latest
     restart: unless-stopped
     ports:
       - "15888:15888"
+      - "8080:8080"
     volumes:
       - "./certs:/home/gateway/certs:ro"
       - "./conf:/home/gateway/conf"

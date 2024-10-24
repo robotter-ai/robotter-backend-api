@@ -1,7 +1,6 @@
 from enum import Enum
 from typing import Any, Dict, Optional, Union, List
 
-from hummingbot.core.data_type.common import PositionMode
 from pydantic import BaseModel, Field
 from decimal import Decimal
 from hummingbot.strategy_v2.controllers import MarketMakingControllerConfigBase, ControllerConfigBase, DirectionalTradingControllerConfigBase
@@ -23,6 +22,8 @@ logger = (
 
 class StrategyParameter(BaseModel):
     name: str
+    group: str
+    is_advanced: bool = False
     type: str
     prompt: str
     default: Optional[Any]
@@ -35,8 +36,30 @@ class StrategyParameter(BaseModel):
     is_timespan: bool = False
     is_connector: bool = False
     is_trading_pair: bool = False
+    is_integer: bool = False
     display_type: str = Field(default="input", description="Can be 'input', 'slider', 'dropdown', 'toggle', or 'date'")
 
+
+def is_advanced_parameter(name: str) -> bool:
+    advanced_keywords = [
+        "activation_bounds", "triple_barrier", "leverage", "dca", "macd", "natr",
+        "multiplier", "imbalance", "executor", "perp", "arbitrage"
+    ]
+    
+    simple_keywords = [
+        "controller_name", "candles", "interval", "stop_loss", "take_profit",
+        "buy", "sell", "position_size", "time_limit", "spot"
+    ]
+    
+    name_lower = name.lower()
+    
+    if any(keyword in name_lower for keyword in advanced_keywords):
+        return True
+    
+    if any(keyword in name_lower for keyword in simple_keywords):
+        return False
+    
+    return True
 
 def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParameter:
     param = StrategyParameter(
@@ -45,14 +68,15 @@ def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParam
         prompt=field.description if hasattr(field, 'description') else "",
         default=field.default,
         required=field.required or field.default is not None,
+        is_advanced=is_advanced_parameter(name),
     )
     
     # structure of field
-    print(field)
-    if hasattr(field, 'client_data'):
-        client_data = field.client_data
-        if param.prompt == "":
-            param.prompt = client_data.prompt() if callable(client_data.prompt) else client_data.prompt
+    client_data = field.field_info.extra.get('client_data')
+    if client_data is not None and param.prompt == "":
+        desc = client_data.prompt(None) if callable(client_data.prompt) else client_data.prompt
+        if desc is not None:
+            param.prompt = desc
         if not param.required:
             param.required = client_data.prompt_on_new if hasattr(client_data, 'prompt_on_new') else param.required
     param.display_type = "input"
@@ -69,6 +93,9 @@ def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParam
     elif param.type == "bool":
         param.display_type = "toggle"
     
+    # Determine the group for the parameter
+    param.group = determine_parameter_group(name)
+
     # Check for specific use cases
     if "connector" in name.lower():
         param.is_connector = True
@@ -84,6 +111,12 @@ def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParam
         param.min_value = Decimal(0)
     if any(word in name.lower() for word in ["time", "interval", "duration"]):
         param.is_timespan = True
+        param.min_value = 0
+    if param.type == "int":
+        param.is_integer = True
+    if any(word in name.lower() for word in ["executors", "workers"]):
+        param.display_type = "slider"
+        param.min_value = 1
     try:
         if issubclass(field.type_, Enum):
             param.valid_values = [item.value for item in field.type_]
@@ -91,6 +124,28 @@ def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParam
     except:
         pass
     return param
+
+def determine_parameter_group(name: str) -> str:
+    if any(word in name.lower() for word in ["controller_name", "candles", "interval"]):
+        return "General Settings"
+    elif any(word in name.lower() for word in ["stop_loss", "trailing_stop", "take_profit", "activation_bounds", "leverage", "triple_barrier"]):
+        return "Risk Management"
+    elif "buy" in name.lower():
+        return "Buy Order Settings"
+    elif "sell" in name.lower():
+        return "Sell Order Settings"
+    elif "dca" in name.lower():
+        return "DCA Settings"
+    elif any(word in name.lower() for word in ["bb", "macd", "natr", "length", "multiplier"]):
+        return "Indicator Settings"
+    elif any(word in name.lower() for word in ["profitability", "position_size"]):
+        return "Profitability Settings"
+    elif any(word in name.lower() for word in ["time_limit", "executor", "imbalance"]):
+        return "Execution Settings"
+    elif any(word in name.lower() for word in ["spot", "perp"]):
+        return "Arbitrage Settings"
+    else:
+        return "Other"
 
 
 @functools.lru_cache(maxsize=1)
