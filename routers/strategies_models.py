@@ -63,7 +63,7 @@ def is_advanced_parameter(name: str) -> bool:
 
 def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParameter:
     param = StrategyParameter(
-        name=name,
+        name=snake_case_to_real_name(name),
         group=determine_parameter_group(name),
         type=str(field.type_.__name__),
         prompt=field.description if hasattr(field, 'description') else "",
@@ -144,6 +144,10 @@ def determine_parameter_group(name: str) -> str:
         return "Arbitrage Settings"
     else:
         return "Other"
+
+
+def snake_case_to_real_name(snake_case: str) -> str:
+    return " ".join([word.capitalize() for word in snake_case.split("_")])
 
 
 @functools.lru_cache(maxsize=1)
