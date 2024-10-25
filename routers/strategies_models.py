@@ -64,6 +64,7 @@ def is_advanced_parameter(name: str) -> bool:
 def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParameter:
     param = StrategyParameter(
         name=name,
+        group=determine_parameter_group(name),
         type=str(field.type_.__name__),
         prompt=field.description if hasattr(field, 'description') else "",
         default=field.default,
@@ -92,9 +93,6 @@ def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParam
         param.display_type = "slider"
     elif param.type == "bool":
         param.display_type = "toggle"
-    
-    # Determine the group for the parameter
-    param.group = determine_parameter_group(name)
 
     # Check for specific use cases
     if "connector" in name.lower():
