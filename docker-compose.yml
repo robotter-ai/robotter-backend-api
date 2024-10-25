@@ -34,7 +34,7 @@ services:
       - gateway-network
 
   gateway:
-    image: hummingbot/gateway:mango-markets-latest
+    image: mlguys/gateway:mango-markets-latest
     restart: unless-stopped
     ports:
       - "15888:15888"
