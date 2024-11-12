@@ -169,6 +169,12 @@ def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParam
         param.min_value = Decimal(0)
     if any(word in name.lower() for word in ["time", "interval", "duration"]):
         param.is_timespan = True
+        param.min_value = 0	
+    if param.type == "int":	
+        param.is_integer = True	
+    if any(word in name.lower() for word in ["executors", "workers"]):	
+        param.display_type = "slider"	
+        param.min_value = 1
     try:
         if issubclass(field.type_, Enum):
             param.valid_values = [item.value for item in field.type_]
