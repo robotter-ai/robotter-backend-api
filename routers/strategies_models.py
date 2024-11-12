@@ -1,7 +1,6 @@
 from enum import Enum
 from typing import Any, Dict, Optional, Union, List
 
-from hummingbot.core.data_type.common import PositionMode
 from pydantic import BaseModel, Field
 from decimal import Decimal
 from hummingbot.strategy_v2.controllers import MarketMakingControllerConfigBase, ControllerConfigBase, DirectionalTradingControllerConfigBase
@@ -134,10 +133,12 @@ def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParam
             param.description = info["description"]
             break
     
-    if hasattr(field, 'client_data'):
-        client_data = field.client_data
-        if param.prompt == "":
-            param.prompt = client_data.prompt() if callable(client_data.prompt) else client_data.prompt
+    # structure of field
+    client_data = field.field_info.extra.get('client_data')
+    if client_data is not None and param.prompt == "":
+        desc = client_data.prompt(None) if callable(client_data.prompt) else client_data.prompt
+        if desc is not None:
+            param.prompt = desc
         if not param.required:
             param.required = client_data.prompt_on_new if hasattr(client_data, 'prompt_on_new') else param.required
     param.display_type = "input"
