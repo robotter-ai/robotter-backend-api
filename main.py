@@ -27,10 +27,12 @@ import os
 from fastapi_walletauth import jwt_authorization_router as authorization_routes
 from starlette.responses import RedirectResponse
 
-import routers.instances
+import routers.bots
 import routers.strategies
 import routers.market_data
 import routers.backtest
+import routers.trades
+
 app = FastAPI()
 
 os.environ['FASTAPI_WALLETAUTH_APP'] = 'robotter-ai'
@@ -47,6 +49,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers - only include each router once with proper prefix and tags
+app.include_router(routers.bots.router, prefix="/api/v1", tags=["Bot Management"])
+app.include_router(routers.strategies.router, prefix="/api/v1", tags=["Strategy Management"])
+app.include_router(routers.market_data.router, prefix="/api/v1", tags=["Market Data"])
+app.include_router(routers.backtest.router, prefix="/api/v1", tags=["Backtesting"])
+app.include_router(routers.trades.router, prefix="/api/v1", tags=["Bot Trading"])
+app.include_router(authorization_routes)
 
 @app.exception_handler(ValidationError)
 async def validation_exception_handler(request, exc):
@@ -54,12 +63,6 @@ async def validation_exception_handler(request, exc):
         status_code=422,
         content={"detail": exc.errors()},
     )
-
-app.include_router(routers.instances.router)
-app.include_router(routers.strategies.router)
-app.include_router(routers.market_data.router)
-app.include_router(routers.backtest.router)
-app.include_router(authorization_routes)
 
 @app.get("/")
 def root():
