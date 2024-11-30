@@ -1,3 +1,10 @@
+# Our stuff
+cache/
+output/
+conf/
+solana/
+hummingbot/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -161,3 +168,33 @@ cython_debug/
 secret_key.txt
 bots/.DS_Store
 .DS_Store
+
+# Test data
+tests/test_data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Build
+dist/
+build/
+*.egg-info/
