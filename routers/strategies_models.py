@@ -12,13 +12,13 @@ import functools
 from pydantic.fields import ModelField
 from pydantic.main import ModelMetaclass
 
-from bots.controllers.directional_trading.bollinger_v1 import BollingerV1ControllerConfig
 
 logger = (
     logging.getLogger(__name__)
     if __name__ != "__main__"
     else logging.getLogger("uvicorn")
 )
+
 
 class StrategyParameter(BaseModel):
     name: str
@@ -60,6 +60,7 @@ def is_advanced_parameter(name: str) -> bool:
         return False
     
     return True
+
 
 def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParameter:
     param = StrategyParameter(
