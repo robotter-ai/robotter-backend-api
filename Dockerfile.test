@@ -1,0 +1,41 @@
+FROM continuumio/miniconda3:latest
+
+RUN apt-get update && \
+    apt-get install -y sudo libusb-1.0 python3-dev gcc g++ && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /backend-api
+
+# Copy and create conda environment
+COPY environment.yml .
+RUN conda env create -f environment.yml
+
+# Install dependencies
+COPY requirements-dev.txt .
+COPY requirements-test.txt .
+RUN conda run -n backend-api pip install -r requirements-dev.txt \
+    && conda run -n backend-api pip install -r requirements-test.txt
+
+# Copy the rest of the application
+COPY . .
+
+# Install the package in development mode
+RUN conda run -n backend-api pip install -e .
+
+# Make setup script executable and run it
+RUN chmod +x tests/setup_config.sh && ./tests/setup_config.sh
+
+# Make sure we use the conda environment
+SHELL ["conda", "run", "-n", "backend-api", "/bin/bash", "-c"]
+
+# Set environment path
+ENV PATH /opt/conda/envs/backend-api/bin:$PATH
+ENV PYTHONPATH=/backend-api:$PYTHONPATH
+
+# Set test environment variables
+ENV CONFIG_PASSWORD=test_password \
+    GATEWAY_CERT_PASSPHRASE=test_passphrase \
+    HUMMINGBOT_CONF_DIR=/backend-api/conf
+
+# Command to run tests
+CMD ["pytest", "tests/", "-v"] 

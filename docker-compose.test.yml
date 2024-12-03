@@ -1,0 +1,10 @@
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    volumes:
+      - .:/backend-api
+    command: >
+      conda run -n backend-api
+      python -m pytest tests/data_sources/test_birdeye.py tests/integration/test_backtest_workflow.py -v

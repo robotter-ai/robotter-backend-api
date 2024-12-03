@@ -21,3 +21,8 @@ repos = [
     { repo = "https://github.com/psf/black", rev = "21.6b0", hooks = [{ id = "black" }] },
     { repo = "https://github.com/pre-commit/mirrors-isort", rev = "v5.9.3", hooks = [{ id = "isort" }] }
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v -s"  # Verbose output and allow print statements
