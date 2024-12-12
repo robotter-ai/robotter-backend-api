@@ -107,7 +107,7 @@ gateway:
   gateway_api_host: localhost
   gateway_api_port: '15888'
 
-certs_path: ./certs
+certs_path: certs
 
 # Whether to enable aggregated order and trade data collection
 anonymized_metrics_mode:
