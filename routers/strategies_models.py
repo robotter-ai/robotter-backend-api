@@ -22,6 +22,81 @@ class StrategyType(str, Enum):
     MARKET_MAKING = "market_making"
     GENERIC = "generic"
 
+class DisplayType(str, Enum):
+    INPUT = "input"
+    SLIDER = "slider"
+    DROPDOWN = "dropdown"
+    TOGGLE = "toggle"
+    DATE = "date"
+
+class ParameterType(str, Enum):
+    PERCENTAGE = "percentage"
+    PRICE = "price"
+    TIMESPAN = "timespan"
+    CONNECTOR = "connector"
+    TRADING_PAIR = "trading_pair"
+    INTEGER = "integer"
+    DECIMAL = "decimal"
+    STRING = "string"
+    BOOLEAN = "boolean"
+
+class ParameterGroup(str, Enum):
+    GENERAL = "General Settings"
+    RISK = "Risk Management"
+    BUY = "Buy Order Settings"
+    SELL = "Sell Order Settings"
+    DCA = "DCA Settings"
+    INDICATORS = "Indicator Settings"
+    PROFITABILITY = "Profitability Settings"
+    EXECUTION = "Execution Settings"
+    ARBITRAGE = "Arbitrage Settings"
+    OTHER = "Other"
+
+class StrategyError(Exception):
+    """Base class for strategy-related errors"""
+
+class StrategyNotFoundError(StrategyError):
+    """Raised when a strategy cannot be found"""
+
+class StrategyValidationError(StrategyError):
+    """Raised when strategy parameters are invalid"""
+
+class ParameterConstraints(BaseModel):
+    min_value: Optional[Union[int, float, Decimal]] = None
+    max_value: Optional[Union[int, float, Decimal]] = None
+    valid_values: Optional[List[Any]] = None
+
+class StrategyParameter(BaseModel):
+    # Core attributes
+    name: str
+    type: str
+    required: bool
+    default: Optional[Any]
+    
+    # Display attributes
+    display_name: str
+    description: str
+    group: ParameterGroup
+    is_advanced: bool
+    
+    # Validation attributes
+    constraints: Optional[ParameterConstraints] = None
+    
+    # UI attributes
+    display_type: DisplayType = DisplayType.INPUT
+    
+    # Type flags (for backward compatibility and specific handling)
+    parameter_type: Optional[ParameterType] = None
+
+class Strategy(BaseModel):
+    id: str
+    name: str
+    description: str
+    type: StrategyType
+    module_path: str
+    config_class: str
+    parameters: Dict[str, StrategyParameter]
+
 class StrategyMapping(BaseModel):
     """Maps a strategy ID to its implementation details"""
     id: str  # e.g., "supertrend_v1"
@@ -30,27 +105,6 @@ class StrategyMapping(BaseModel):
     strategy_type: StrategyType
     display_name: str  # e.g., "Supertrend V1"
     description: str = ""
-
-class StrategyParameter(BaseModel):
-    name: str
-    group: str
-    is_advanced: bool = False
-    pretty_name: str
-    description: str
-    type: str
-    prompt: str
-    default: Optional[Any]
-    required: bool
-    min_value: Optional[Union[int, float, Decimal]] = None
-    max_value: Optional[Union[int, float, Decimal]] = None
-    valid_values: Optional[List[Any]] = None
-    is_percentage: bool = False
-    is_price: bool = False
-    is_timespan: bool = False
-    is_connector: bool = False
-    is_trading_pair: bool = False
-    is_integer: bool = False
-    display_type: str = Field(default="input", description="Can be 'input', 'slider', 'dropdown', 'toggle', or 'date'")
 
 class StrategyConfig(BaseModel):
     """Complete strategy configuration including metadata and parameters"""
@@ -124,106 +178,123 @@ def get_strategy_display_info() -> Dict[str, Dict[str, str]]:
         }
     }
 
-def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParameter:
-    param = StrategyParameter(
-        name=name,
-        type=str(field.type_.__name__),
-        prompt=field.description if hasattr(field, 'description') else "",
-        default=field.default,
-        required=field.required or field.default is not None,
-        is_advanced=is_advanced_parameter(name),
-        group=determine_parameter_group(name),
-        pretty_name=name.replace('_', ' ').title(),
-        description="",
-    )
-
-    # Get strategy display info
-    strategy_info = get_strategy_display_info()
-
-    # Try to find matching strategy info
-    for strategy_name, info in strategy_info.items():
-        if strategy_name in name.lower():
-            param.pretty_name = info["pretty_name"]
-            param.description = info["description"]
-            break
-
-    # structure of field
-    client_data = field.field_info.extra.get('client_data')
-    if client_data is not None and param.prompt == "":
-        desc = client_data.prompt(None) if callable(client_data.prompt) else client_data.prompt
-        if desc is not None:
-            param.prompt = desc
-        if not param.required:
-            param.required = client_data.prompt_on_new if hasattr(client_data, 'prompt_on_new') else param.required
-    param.display_type = "input"
+class StrategyRegistry:
+    """Central registry for all trading strategies"""
     
-    # Check for gt (greater than) and lt (less than) in field definition
+    _cache: Dict[str, Strategy] = {}
+    
+    @classmethod
+    def _ensure_cache_loaded(cls):
+        if not cls._cache:
+            cls._cache = discover_strategies()
+    
+    @classmethod
+    def get_all_strategies(cls) -> Dict[str, Strategy]:
+        """Get all available strategies with their configurations"""
+        cls._ensure_cache_loaded()
+        return cls._cache
+    
+    @classmethod
+    def get_strategy(cls, strategy_id: str) -> Optional[Strategy]:
+        """Get a specific strategy by ID"""
+        cls._ensure_cache_loaded()
+        strategy = cls._cache.get(strategy_id)
+        if not strategy:
+            raise StrategyNotFoundError(f"Strategy '{strategy_id}' not found")
+        return strategy
+    
+    @classmethod
+    def get_strategies_by_type(cls, strategy_type: StrategyType) -> List[Strategy]:
+        """Get all strategies of a specific type"""
+        cls._ensure_cache_loaded()
+        return [s for s in cls._cache.values() if s.type == strategy_type]
+
+def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParameter:
+    """Convert a model field to a strategy parameter"""
+    constraints = ParameterConstraints()
+    
+    # Handle constraints
     if hasattr(field.field_info, 'ge'):
-        param.min_value = field.field_info.ge
+        constraints.min_value = field.field_info.ge
     elif hasattr(field.field_info, 'gt'):
-        param.min_value = field.field_info.gt + (1 if isinstance(field.field_info.gt, int) else Decimal('0'))
+        constraints.min_value = field.field_info.gt + (1 if isinstance(field.field_info.gt, int) else Decimal('0'))
 
     if hasattr(field.field_info, 'le'):
-        param.max_value = field.field_info.le
+        constraints.max_value = field.field_info.le
     elif hasattr(field.field_info, 'lt'):
-        param.max_value = field.field_info.lt - (1 if isinstance(field.field_info.lt, int) else Decimal('0'))
+        constraints.max_value = field.field_info.lt - (1 if isinstance(field.field_info.lt, int) else Decimal('0'))
 
-    
-    # Set display_type to "slider" only if both min and max values are present
-    if param.min_value is not None and param.max_value is not None:
-        param.display_type = "slider"
-    elif param.type == "bool":
-        param.display_type = "toggle"
-
+    # Determine parameter type
+    param_type = None
     if "connector" in name.lower():
-        param.is_connector = True
-    if "trading_pair" in name.lower():
-        param.is_trading_pair = True
-    if any(word in name.lower() for word in ["percentage", "percent", "ratio", "pct"]):
-        param.is_percentage = True
-    if "price" in name.lower():
-        param.is_price = True
-        if param.min_value is None:
-            param.min_value = Decimal(0)
-    if "amount" in name.lower():
-        param.min_value = Decimal(0)
-    if any(word in name.lower() for word in ["time", "interval", "duration"]):
-        param.is_timespan = True
-        param.min_value = 0
-    if param.type == "int":
-        param.is_integer = True
-    if any(word in name.lower() for word in ["executors", "workers"]):
-        param.display_type = "slider"
-        param.min_value = 1
-    try:
-        if issubclass(field.type_, Enum):
-            param.valid_values = [item.value for item in field.type_]
-            param.display_type = "dropdown"
-    except:
-        pass
-    return param
-
-def determine_parameter_group(name: str) -> str:
-    if any(word in name.lower() for word in ["controller_name", "candles", "interval"]):
-        return "General Settings"
-    elif any(word in name.lower() for word in ["stop_loss", "trailing_stop", "take_profit", "activation_bounds", "leverage", "triple_barrier"]):
-        return "Risk Management"
-    elif "buy" in name.lower():
-        return "Buy Order Settings"
-    elif "sell" in name.lower():
-        return "Sell Order Settings"
-    elif "dca" in name.lower():
-        return "DCA Settings"
-    elif any(word in name.lower() for word in ["bb", "macd", "natr", "length", "multiplier"]):
-        return "Indicator Settings"
-    elif any(word in name.lower() for word in ["profitability", "position_size"]):
-        return "Profitability Settings"
-    elif any(word in name.lower() for word in ["time_limit", "executor", "imbalance"]):
-        return "Execution Settings"
-    elif any(word in name.lower() for word in ["spot", "perp"]):
-        return "Arbitrage Settings"
+        param_type = ParameterType.CONNECTOR
+    elif "trading_pair" in name.lower():
+        param_type = ParameterType.TRADING_PAIR
+    elif any(word in name.lower() for word in ["percentage", "percent", "ratio", "pct"]):
+        param_type = ParameterType.PERCENTAGE
+    elif "price" in name.lower():
+        param_type = ParameterType.PRICE
+    elif any(word in name.lower() for word in ["time", "interval", "duration"]):
+        param_type = ParameterType.TIMESPAN
+    elif str(field.type_.__name__).lower() == "int":
+        param_type = ParameterType.INTEGER
+    elif str(field.type_.__name__).lower() == "decimal":
+        param_type = ParameterType.DECIMAL
+    elif str(field.type_.__name__).lower() == "bool":
+        param_type = ParameterType.BOOLEAN
     else:
-        return "Other"
+        param_type = ParameterType.STRING
+
+    # Determine display type
+    display_type = DisplayType.INPUT
+    if constraints.min_value is not None and constraints.max_value is not None:
+        display_type = DisplayType.SLIDER
+    elif param_type == ParameterType.BOOLEAN:
+        display_type = DisplayType.TOGGLE
+    elif constraints.valid_values:
+        display_type = DisplayType.DROPDOWN
+
+    # Get group
+    group = determine_parameter_group(name)
+    
+    return StrategyParameter(
+        name=name,
+        type=str(field.type_.__name__),
+        required=field.required or field.default is not None,
+        default=field.default,
+        display_name=name.replace('_', ' ').title(),
+        description=field.description if hasattr(field, 'description') else "",
+        group=group,
+        is_advanced=is_advanced_parameter(name),
+        constraints=constraints,
+        display_type=display_type,
+        parameter_type=param_type
+    )
+
+def determine_parameter_group(name: str) -> ParameterGroup:
+    """Determine the parameter group based on the parameter name"""
+    name_lower = name.lower()
+    
+    if any(word in name_lower for word in ["controller_name", "candles", "interval"]):
+        return ParameterGroup.GENERAL
+    elif any(word in name_lower for word in ["stop_loss", "trailing_stop", "take_profit", "activation_bounds", "leverage", "triple_barrier"]):
+        return ParameterGroup.RISK
+    elif "buy" in name_lower:
+        return ParameterGroup.BUY
+    elif "sell" in name_lower:
+        return ParameterGroup.SELL
+    elif "dca" in name_lower:
+        return ParameterGroup.DCA
+    elif any(word in name_lower for word in ["bb", "macd", "natr", "length", "multiplier"]):
+        return ParameterGroup.INDICATORS
+    elif any(word in name_lower for word in ["profitability", "position_size"]):
+        return ParameterGroup.PROFITABILITY
+    elif any(word in name_lower for word in ["time_limit", "executor", "imbalance"]):
+        return ParameterGroup.EXECUTION
+    elif any(word in name_lower for word in ["spot", "perp"]):
+        return ParameterGroup.ARBITRAGE
+    else:
+        return ParameterGroup.OTHER
 
 def snake_case_to_real_name(snake_case: str) -> str:
     return " ".join([word.capitalize() for word in snake_case.split("_")])
@@ -261,9 +332,9 @@ def generate_strategy_mapping(module_path: str, config_class: Any) -> StrategyMa
     )
 
 @functools.lru_cache(maxsize=1)
-def discover_strategies() -> Dict[str, StrategyConfig]:
+def discover_strategies() -> Dict[str, Strategy]:
     """Discover and load all available strategies"""
-    strategy_configs = {}
+    strategies = {}
     controllers_dir = "bots/controllers"
     
     for root, dirs, files in os.walk(controllers_dir):
@@ -285,18 +356,29 @@ def discover_strategies() -> Dict[str, StrategyConfig]:
                         ):
                             assert isinstance(obj, ModelMetaclass)
 
-                            # Generate mapping
-                            mapping = generate_strategy_mapping(module_path, obj)
-
+                            # Extract strategy ID from module path
+                            strategy_id = module_path.split(".")[-1]
+                            
+                            # Get strategy type
+                            strategy_type = infer_strategy_type(module_path, obj)
+                            
+                            # Get display info
+                            display_info = get_strategy_display_info().get(strategy_id, {})
+                            
                             # Convert parameters
                             parameters = {}
                             for field_name, field in obj.__fields__.items():
                                 param = convert_to_strategy_parameter(field_name, field)
                                 parameters[field_name] = param
                             
-                            # Create complete strategy config
-                            strategy_configs[mapping.id] = StrategyConfig(
-                                mapping=mapping,
+                            # Create strategy
+                            strategies[strategy_id] = Strategy(
+                                id=strategy_id,
+                                name=display_info.get("pretty_name", " ".join(word.capitalize() for word in strategy_id.split("_"))),
+                                description=display_info.get("description", obj.__doc__ or ""),
+                                type=strategy_type,
+                                module_path=module_path,
+                                config_class=obj.__name__,
                                 parameters=parameters
                             )
 
@@ -307,20 +389,37 @@ def discover_strategies() -> Dict[str, StrategyConfig]:
                     import traceback
                     traceback.print_exc()
 
-    return strategy_configs
+    return strategies
 
 def get_strategy_mapping(strategy_id: str) -> Optional[StrategyMapping]:
-    """Get strategy mapping by ID"""
-    strategies = discover_strategies()
-    strategy = strategies.get(strategy_id)
-    return strategy.mapping if strategy else None
+    """
+    DEPRECATED: Use StrategyRegistry.get_strategy() instead
+    Get strategy mapping by ID
+    """
+    logger.warning("get_strategy_mapping is deprecated. Use StrategyRegistry.get_strategy() instead")
+    strategy = StrategyRegistry.get_strategy(strategy_id)
+    if not strategy:
+        return None
+    return StrategyMapping(
+        id=strategy.id,
+        config_class=strategy.config_class,
+        module_path=strategy.module_path,
+        strategy_type=strategy.type,
+        display_name=strategy.name,
+        description=strategy.description
+    )
 
 def get_strategy_module_path(strategy_id: str) -> Optional[str]:
-    """Get the module path for a strategy"""
-    mapping = get_strategy_mapping(strategy_id)
-    return mapping.module_path if mapping else None
+    """
+    DEPRECATED: Use StrategyRegistry.get_strategy().module_path instead
+    Get the module path for a strategy
+    """
+    logger.warning("get_strategy_module_path is deprecated. Use StrategyRegistry.get_strategy().module_path instead")
+    strategy = StrategyRegistry.get_strategy(strategy_id)
+    return strategy.module_path if strategy else None
 
 def is_advanced_parameter(name: str) -> bool:
+    """Determine if a parameter should be considered advanced"""
     advanced_keywords = [
         "activation_bounds", "triple_barrier", "leverage", "dca", "macd", "natr",
         "multiplier", "imbalance", "executor", "perp", "arbitrage"
