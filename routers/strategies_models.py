@@ -24,6 +24,8 @@ class StrategyParameter(BaseModel):
     name: str
     group: str
     is_advanced: bool = False
+    pretty_name: str
+    description: str
     type: str
     prompt: str
     default: Optional[Any]
@@ -61,16 +63,76 @@ def is_advanced_parameter(name: str) -> bool:
     
     return True
 
+def get_strategy_display_info() -> Dict[str, Dict[str, str]]:
+    """
+    Returns user-friendly names and descriptions for each strategy
+    """
+    return {
+        # Directional Trading Strategies
+        "bollinger_v1": {
+            "pretty_name": "Bollinger Bands Strategy",
+            "description": "Buys when price is low and sells when price is high based on Bollinger Bands."
+        },
+        "dman_v3": {
+            "pretty_name": "Smart DCA Strategy",
+            "description": "Automatically adjusts buy/sell levels based on market conditions with multiple take-profit targets."
+        },
+        "macd_bb_v1": {
+            "pretty_name": "MACD + Bollinger Strategy",
+            "description": "Uses two popular indicators to find better entry and exit points for trades."
+        },
+        "supertrend_v1": {
+            "pretty_name": "SuperTrend Strategy",
+            "description": "Follows market trends to find good times to buy and sell."
+        },
+        
+        # Market Making Strategies
+        "dman_maker_v2": {
+            "pretty_name": "Smart Market Maker",
+            "description": "Places buy and sell orders that automatically adjust to market conditions."
+        },
+        "pmm_dynamic": {
+            "pretty_name": "Dynamic Market Maker",
+            "description": "Places orders with spreads that adapt to market volatility."
+        },
+        "pmm_simple": {
+            "pretty_name": "Simple Market Maker",
+            "description": "Places basic buy and sell orders with fixed spreads."
+        },
+        
+        # Generic Strategies
+        "spot_perp_arbitrage": {
+            "pretty_name": "Spot-Futures Arbitrage",
+            "description": "Profits from price differences between spot and futures markets."
+        },
+        "xemm_multiple_levels": {
+            "pretty_name": "Multi-Exchange Market Maker",
+            "description": "Places orders across different exchanges to capture price differences."
+        }
+    }
+
 def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParameter:
     param = StrategyParameter(
-        name=snake_case_to_real_name(name),
-        group=determine_parameter_group(name),
+        name=name,
         type=str(field.type_.__name__),
         prompt=field.description if hasattr(field, 'description') else "",
         default=field.default,
         required=field.required or field.default is not None,
         is_advanced=is_advanced_parameter(name),
+        group=determine_parameter_group(name),
+        pretty_name=name.replace('_', ' ').title(),  
+        description="",  
     )
+    
+    # Get strategy display info
+    strategy_info = get_strategy_display_info()
+    
+    # Try to find matching strategy info
+    for strategy_name, info in strategy_info.items():
+        if strategy_name in name.lower():
+            param.pretty_name = info["pretty_name"]
+            param.description = info["description"]
+            break
     
     # structure of field
     client_data = field.field_info.extra.get('client_data')
@@ -93,8 +155,7 @@ def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParam
         param.display_type = "slider"
     elif param.type == "bool":
         param.display_type = "toggle"
-
-    # Check for specific use cases
+    
     if "connector" in name.lower():
         param.is_connector = True
     if "trading_pair" in name.lower():
@@ -109,11 +170,11 @@ def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParam
         param.min_value = Decimal(0)
     if any(word in name.lower() for word in ["time", "interval", "duration"]):
         param.is_timespan = True
-        param.min_value = 0
-    if param.type == "int":
-        param.is_integer = True
-    if any(word in name.lower() for word in ["executors", "workers"]):
-        param.display_type = "slider"
+        param.min_value = 0	
+    if param.type == "int":	
+        param.is_integer = True	
+    if any(word in name.lower() for word in ["executors", "workers"]):	
+        param.display_type = "slider"	
         param.min_value = 1
     try:
         if issubclass(field.type_, Enum):
@@ -144,10 +205,6 @@ def determine_parameter_group(name: str) -> str:
         return "Arbitrage Settings"
     else:
         return "Other"
-
-
-def snake_case_to_real_name(snake_case: str) -> str:
-    return " ".join([word.capitalize() for word in snake_case.split("_")])
 
 
 @functools.lru_cache(maxsize=1)
