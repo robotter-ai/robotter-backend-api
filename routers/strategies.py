@@ -23,11 +23,17 @@ async def lifespan(app: FastAPI):
     # Initialize contexts on startup
     try:
         # Load strategies using auto-discovery
+        print("Initializing LibertAI contexts...")
         strategies = discover_strategies()
         await libert_ai_service.initialize_contexts(strategies)
+        print(f"Successfully initialized contexts for {len(strategies)} strategies")
     except Exception as e:
         print(f"Error initializing LibertAI contexts: {str(e)}")
+        # Re-raise the exception to prevent app startup if context initialization fails
+        raise
     yield
+    # Cleanup on shutdown if needed
+    print("Cleaning up LibertAI contexts...")
 
 # Create the FastAPI app with the lifespan handler
 app = FastAPI(lifespan=lifespan)
@@ -59,6 +65,11 @@ async def suggest_parameters(request: ParameterSuggestionRequest) -> ParameterSu
             raise HTTPException(status_code=404, detail=f"Strategy '{request.strategy_id}' not found")
         
         strategy = strategies[request.strategy_id]
+        
+        # Ensure context is initialized for this strategy
+        if request.strategy_id not in libert_ai_service.strategy_slot_map:
+            print(f"Re-initializing context for strategy {request.strategy_id}")
+            await libert_ai_service.initialize_contexts({request.strategy_id: strategy})
         
         try:
             # Get suggestions from LibertAI
