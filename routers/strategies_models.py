@@ -38,6 +38,7 @@ class StrategyParameter(BaseModel):
     is_timespan: bool = False
     is_connector: bool = False
     is_trading_pair: bool = False
+    is_integer: bool = False
     display_type: str = Field(default="input", description="Can be 'input', 'slider', 'dropdown', 'toggle', or 'date'")
 
 
