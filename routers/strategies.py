@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Any
 from fastapi import APIRouter, HTTPException
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
@@ -8,7 +8,10 @@ from routers.strategies_models import (
     ParameterSuggestionRequest,
     ParameterSuggestionResponse,
     StrategyConfig,
-    discover_strategies
+    StrategyRegistry,
+    StrategyNotFoundError,
+    StrategyValidationError,
+    StrategyError
 )
 
 # Create a libert_ai_service instance
@@ -20,7 +23,7 @@ async def lifespan(app: FastAPI):
     try:
         # Load strategies using auto-discovery
         print("Initializing LibertAI contexts...")
-        strategies = discover_strategies()
+        strategies = StrategyRegistry.get_all_strategies()
         await libert_ai_service.initialize_contexts(strategies)
         print(f"Successfully initialized contexts for {len(strategies)} strategies")
     except Exception as e:
@@ -39,10 +42,14 @@ router = APIRouter()
 async def get_strategies() -> Dict[str, StrategyConfig]:
     """Get all available strategies and their configurations."""
     try:
-        # Use auto-discovery to get strategies
-        return discover_strategies()
+        return StrategyRegistry.get_all_strategies()
+    except StrategyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error while fetching strategies: {str(e)}"
+        )
 
 @router.post("/strategies/suggest-parameters")
 async def suggest_parameters(request: ParameterSuggestionRequest) -> ParameterSuggestionResponse:
@@ -54,13 +61,17 @@ async def suggest_parameters(request: ParameterSuggestionRequest) -> ParameterSu
     Otherwise, will suggest values for all missing required parameters.
     """
     try:
-        # Get strategy configuration using auto-discovery
-        strategies = discover_strategies()
+        # Get strategy using the registry
+        try:
+            strategy = StrategyRegistry.get_strategy(request.strategy_id)
+        except StrategyNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
         
-        if request.strategy_id not in strategies:
-            raise HTTPException(status_code=404, detail=f"Strategy '{request.strategy_id}' not found")
-        
-        strategy = strategies[request.strategy_id]
+        # Validate parameters against constraints
+        try:
+            validate_parameters(strategy, request.parameters)
+        except StrategyValidationError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         
         # Ensure context is initialized for this strategy
         if request.strategy_id not in libert_ai_service.strategy_slot_map:
@@ -90,9 +101,40 @@ async def suggest_parameters(request: ParameterSuggestionRequest) -> ParameterSu
             )
             
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error getting parameter suggestions: {str(e)}"
+            )
             
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error processing parameter suggestions: {str(e)}"
+        )
+
+def validate_parameters(strategy: StrategyConfig, parameters: Dict[str, Any]) -> None:
+    """Validate parameters against their constraints"""
+    for param_name, value in parameters.items():
+        if param_name not in strategy.parameters:
+            raise StrategyValidationError(f"Unknown parameter: {param_name}")
+            
+        param = strategy.parameters[param_name]
+        constraints = param.constraints
+        
+        if constraints:
+            if constraints.min_value is not None and value < constraints.min_value:
+                raise StrategyValidationError(
+                    f"Parameter {param_name} value {value} is below minimum {constraints.min_value}"
+                )
+                
+            if constraints.max_value is not None and value > constraints.max_value:
+                raise StrategyValidationError(
+                    f"Parameter {param_name} value {value} is above maximum {constraints.max_value}"
+                )
+                
+            if constraints.valid_values is not None and value not in constraints.valid_values:
+                raise StrategyValidationError(
+                    f"Parameter {param_name} value {value} is not one of the valid values: {constraints.valid_values}"
+                )
