@@ -88,7 +88,9 @@ def mock_discover_strategies():
                 ),
                 parameters={
                     "stop_loss": StrategyParameter(
-                        name="Stop Loss",
+                        name="stop_loss",
+                        pretty_name="Stop Loss",
+                        description="Stop loss percentage",
                         group="Risk Management",
                         type="Decimal",
                         prompt="Enter stop loss value",
@@ -98,7 +100,9 @@ def mock_discover_strategies():
                         max_value=Decimal("1")
                     ),
                     "take_profit": StrategyParameter(
-                        name="Take Profit",
+                        name="take_profit",
+                        pretty_name="Take Profit",
+                        description="Take profit percentage",
                         group="Risk Management",
                         type="Decimal",
                         prompt="Enter take profit value",
@@ -108,7 +112,9 @@ def mock_discover_strategies():
                         max_value=Decimal("1")
                     ),
                     "time_limit": StrategyParameter(
-                        name="Time Limit",
+                        name="time_limit",
+                        pretty_name="Time Limit",
+                        description="Time limit in seconds",
                         group="General Settings",
                         type="int",
                         prompt="Enter time limit in seconds",
@@ -117,7 +123,9 @@ def mock_discover_strategies():
                         min_value=0
                     ),
                     "leverage": StrategyParameter(
-                        name="Leverage",
+                        name="leverage",
+                        pretty_name="Leverage",
+                        description="Leverage multiplier",
                         group="Risk Management",
                         type="int",
                         prompt="Enter leverage multiplier",
@@ -127,7 +135,9 @@ def mock_discover_strategies():
                         is_advanced=True
                     ),
                     "trading_pair": StrategyParameter(
-                        name="Trading Pair",
+                        name="trading_pair",
+                        pretty_name="Trading Pair",
+                        description="Trading pair to use",
                         group="General Settings",
                         type="str",
                         prompt="Enter trading pair",
@@ -163,7 +173,7 @@ def test_convert_to_strategy_parameter():
     field = MockStrategyConfig.__fields__["stop_loss"]
     param = convert_to_strategy_parameter("stop_loss", field)
     
-    assert param.name == "Stop Loss"
+    assert param.pretty_name == "Stop Loss"
     assert param.group == "Risk Management"
     assert param.type == "ConstrainedDecimalValue"  # We want the base type, not the constrained type
     assert param.default == Decimal("0.03")
