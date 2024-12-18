@@ -1,4 +1,0 @@
-uvicorn[standard]
-python-dotenv
-debugpy
-ipdb  # for interactive debugging 

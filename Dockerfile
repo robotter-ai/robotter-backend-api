@@ -1,27 +1,44 @@
-# Start from a base image with Miniconda installed
-FROM continuumio/miniconda3
+# Build stage
+FROM python:3.10-slim as builder
 
 # Install system dependencies
-RUN apt-get update && \
-    apt-get install -y sudo libusb-1.0 python3-dev gcc g++ && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libffi-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory in the container
-WORKDIR /backend-api
+# Install poetry
+RUN pip install poetry
 
-# Copy only the environment.yml file first
-COPY environment.yml .
+# Copy only dependency files
+WORKDIR /app
+COPY pyproject.toml poetry.lock* ./
 
-# Create the environment from the environment.yml file
-RUN conda env create -f environment.yml
+# Configure poetry to not create a virtual environment (we're in a container)
+RUN poetry config virtualenvs.create false
 
-# Make RUN commands use the new environment
-SHELL ["conda", "run", "-n", "backend-api", "/bin/bash", "-c"]
+# Install dependencies
+RUN poetry install --no-dev --no-interaction --no-ansi
 
-# Copy the rest of the application code
+# Runtime stage
+FROM python:3.10-slim
+
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+WORKDIR /app
+
+# Copy application code
 COPY . .
 
-RUN mkdir -p /backend-api/bots/credentials
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
-# The code to run when container is started
-ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "backend-api", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Expose port
+EXPOSE 8000
+
+# Run the application
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

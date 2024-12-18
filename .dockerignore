@@ -1,1 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+bin/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+venv/
 .env
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+
+# Misc
+.DS_Store
+*.log
+.cache/
+.env.*
+!.env.example
+
+# Project specific
+tests/
+docs/
+*.md
+!README.md
+.pre-commit-config.yaml
+environment.yml
+requirements*.txt
