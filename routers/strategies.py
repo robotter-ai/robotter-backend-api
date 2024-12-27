@@ -1,7 +1,8 @@
 from typing import Dict, Any
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+from fastapi.responses import JSONResponse
 
 from services.libert_ai_service import LibertAIService
 from routers.strategies_models import (
@@ -11,7 +12,8 @@ from routers.strategies_models import (
     StrategyRegistry,
     StrategyNotFoundError,
     StrategyValidationError,
-    StrategyError
+    StrategyError,
+    StrategyType
 )
 
 # Create a libert_ai_service instance
@@ -38,40 +40,192 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 router = APIRouter()
 
-@router.get("/strategies")
+responses = {
+    400: {
+        "description": "Bad Request - Invalid parameters or configuration",
+        "content": {
+            "application/json": {
+                "examples": {
+                    "validation_error": {
+                        "summary": "Parameter Validation Error",
+                        "value": {"detail": "Parameter 'stop_loss' value 0.5 is above maximum 0.1"}
+                    },
+                    "strategy_error": {
+                        "summary": "Strategy Configuration Error",
+                        "value": {"detail": "Unknown parameter: invalid_param"}
+                    }
+                }
+            }
+        }
+    },
+    404: {
+        "description": "Not Found - Strategy does not exist",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Strategy 'unknown_strategy' not found"}
+            }
+        }
+    },
+    500: {
+        "description": "Internal Server Error",
+        "content": {
+            "application/json": {
+                "examples": {
+                    "processing_error": {
+                        "summary": "Processing Error",
+                        "value": {"detail": "Error processing backtesting results: Invalid data format"}
+                    },
+                    "unexpected_error": {
+                        "summary": "Unexpected Error",
+                        "value": {"detail": "An unexpected error occurred"}
+                    }
+                }
+            }
+        }
+    }
+}
+
+@router.get(
+    "/strategies",
+    response_model=Dict[str, StrategyConfig],
+    responses={
+        200: {
+            "description": "Successfully retrieved all available strategies",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "bollinger_v1": {
+                            "mapping": {
+                                "id": "bollinger_v1",
+                                "config_class": "BollingerConfig",
+                                "module_path": "bots.controllers.directional_trading.bollinger_v1",
+                                "strategy_type": "directional_trading",
+                                "display_name": "Bollinger Bands Strategy",
+                                "description": "Buys when price is low and sells when price is high based on Bollinger Bands."
+                            },
+                            "parameters": {
+                                "stop_loss": {
+                                    "name": "stop_loss",
+                                    "type": "Decimal",
+                                    "required": True,
+                                    "default": "0.03",
+                                    "display_name": "Stop Loss",
+                                    "description": "Stop loss percentage",
+                                    "group": "Risk Management",
+                                    "is_advanced": False,
+                                    "constraints": {
+                                        "min_value": 0,
+                                        "max_value": 0.1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        **responses
+    },
+    summary="Get All Strategies",
+    description="""
+    Retrieve all available trading strategies and their configurations.
+    
+    Returns a dictionary where:
+    - Keys are strategy IDs (e.g., "bollinger_v1", "supertrend_v1")
+    - Values are complete strategy configurations including:
+        - Mapping information (ID, type, display name, etc.)
+        - Parameters with their constraints and metadata
+        
+    The strategies are grouped into three types:
+    - Directional Trading: Strategies that follow market trends
+    - Market Making: Strategies that provide market liquidity
+    - Generic: Other types of strategies (e.g., arbitrage)
+    """
+)
 async def get_strategies() -> Dict[str, StrategyConfig]:
     """Get all available strategies and their configurations."""
     try:
         return StrategyRegistry.get_all_strategies()
     except StrategyError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error while fetching strategies: {str(e)}"
         )
 
-@router.post("/strategies/suggest-parameters")
-async def suggest_parameters(request: ParameterSuggestionRequest) -> ParameterSuggestionResponse:
-    """
-    Suggest parameter values for a strategy based on the provided parameters.
-    Uses LibertAI to analyze and suggest optimal values for missing or requested parameters.
+@router.post(
+    "/strategies/suggest-parameters",
+    response_model=ParameterSuggestionResponse,
+    responses={
+        200: {
+            "description": "Successfully generated parameter suggestions",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "suggestions": [
+                            {
+                                "parameter_name": "stop_loss",
+                                "suggested_value": "0.02",
+                                "reasoning": "Based on current market volatility, a 2% stop loss provides good protection while allowing reasonable profit potential.",
+                                "differs_from_default": True,
+                                "differs_from_provided": True
+                            }
+                        ],
+                        "summary": "Suggestions optimized for current market conditions with focus on risk management."
+                    }
+                }
+            }
+        },
+        **responses
+    },
+    summary="Get Parameter Suggestions",
+    description="""
+    Get AI-powered suggestions for strategy parameters based on current market conditions.
     
-    If requested_parameters is provided, will only suggest values for those specific parameters.
-    Otherwise, will suggest values for all missing required parameters.
+    This endpoint uses LibertAI to analyze:
+    - Current market conditions
+    - Historical performance
+    - Risk parameters
+    - Strategy characteristics
+    
+    And provides:
+    - Suggested parameter values
+    - Reasoning for each suggestion
+    - Comparison with defaults
+    - Overall strategy summary
+    
+    You can:
+    - Provide partial parameters and get suggestions for the rest
+    - Request suggestions for specific parameters only
+    - Get suggestions for all parameters
+    
+    The suggestions aim to optimize for:
+    - Risk management
+    - Market conditions
+    - Strategy effectiveness
+    - Historical performance patterns
     """
+)
+async def suggest_parameters(request: ParameterSuggestionRequest) -> ParameterSuggestionResponse:
     try:
         # Get strategy using the registry
         try:
             strategy = StrategyRegistry.get_strategy(request.strategy_id)
         except StrategyNotFoundError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e)
+            )
         
         # Validate parameters against constraints
         try:
             validate_parameters(strategy, request.parameters)
         except StrategyValidationError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
         
         # Ensure context is initialized for this strategy
         if request.strategy_id not in libert_ai_service.strategy_slot_map:
@@ -102,7 +256,7 @@ async def suggest_parameters(request: ParameterSuggestionRequest) -> ParameterSu
             
         except Exception as e:
             raise HTTPException(
-                status_code=500,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error getting parameter suggestions: {str(e)}"
             )
             
@@ -110,7 +264,7 @@ async def suggest_parameters(request: ParameterSuggestionRequest) -> ParameterSu
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error processing parameter suggestions: {str(e)}"
         )
 

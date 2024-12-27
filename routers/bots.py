@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from services.accounts_service import AccountsService, BotConfig
 from services.docker_service import DockerManager
@@ -34,7 +34,110 @@ class CreateBotRequest(BaseModel):
     strategy_parameters: dict
     market: str
 
-@router.post("/bots", response_model=InstanceResponse)
+responses = {
+    400: {
+        "description": "Bad Request - Invalid bot configuration",
+        "content": {
+            "application/json": {
+                "examples": {
+                    "invalid_strategy": {
+                        "summary": "Invalid Strategy",
+                        "value": {"detail": "Invalid strategy: Strategy 'unknown_strategy' not found"}
+                    },
+                    "invalid_params": {
+                        "summary": "Invalid Parameters",
+                        "value": {"detail": "Invalid strategy parameters: Parameter 'stop_loss' value 0.5 is above maximum 0.1"}
+                    },
+                    "invalid_config": {
+                        "summary": "Invalid Configuration",
+                        "value": {"detail": "Error saving bot configuration: Invalid market format"}
+                    }
+                }
+            }
+        }
+    },
+    403: {
+        "description": "Forbidden - Permission denied",
+        "content": {
+            "application/json": {
+                "example": {"detail": "You don't have permission to access this bot"}
+            }
+        }
+    },
+    404: {
+        "description": "Not Found - Bot not found",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Bot wallet not found: Invalid bot ID"}
+            }
+        }
+    },
+    500: {
+        "description": "Internal Server Error",
+        "content": {
+            "application/json": {
+                "examples": {
+                    "creation_error": {
+                        "summary": "Creation Error",
+                        "value": {"detail": "Error creating Hummingbot instance: Docker service unavailable"}
+                    },
+                    "start_error": {
+                        "summary": "Start Error",
+                        "value": {"detail": "Error starting bot: Failed to initialize trading"}
+                    }
+                }
+            }
+        }
+    }
+}
+
+@router.post(
+    "/bots",
+    response_model=InstanceResponse,
+    responses={
+        200: {
+            "description": "Successfully created trading bot",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "instance_id": "robotter_0x123_sol-usdc_bollinger_v1",
+                        "wallet_address": "0xabc...def",
+                        "market": "sol-usdc"
+                    }
+                }
+            }
+        },
+        **responses
+    },
+    summary="Create Trading Bot",
+    description="""
+    Create a new trading bot instance with specified strategy and configuration.
+    
+    The creation process:
+    1. Validates the strategy and its parameters
+    2. Creates a dedicated bot account
+    3. Generates a bot-specific wallet
+    4. Saves the configuration
+    5. Creates a Hummingbot instance
+    
+    Requirements:
+    - Valid strategy name from available strategies
+    - Valid strategy parameters within constraints
+    - Valid market format (e.g., "sol-usdc")
+    - Authenticated wallet connection
+    
+    The created bot will:
+    - Have its own isolated wallet
+    - Run in a dedicated Docker container
+    - Use the specified trading strategy
+    - Trade on the specified market
+    
+    Security features:
+    - Bot wallet is separate from user wallet
+    - Bot permissions are limited to its specific market
+    - Trading parameters are validated before deployment
+    """
+)
 async def create_bot(request: CreateBotRequest, wallet_auth: JWTWalletAuthDep):
     try:
         # Validate strategy exists and parameters
@@ -90,18 +193,47 @@ async def create_bot(request: CreateBotRequest, wallet_auth: JWTWalletAuthDep):
         )
 
     except BotConfigError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except BotPermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except BotError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error creating bot: {str(e)}"
         )
 
-@router.get("/bots/{bot_id}/wallet")
+@router.get(
+    "/bots/{bot_id}/wallet",
+    responses={
+        200: {
+            "description": "Successfully retrieved bot wallet",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "wallet_address": "0xabc...def"
+                    }
+                }
+            }
+        },
+        **responses
+    },
+    summary="Get Bot Wallet",
+    description="""
+    Retrieve the wallet address associated with a specific trading bot.
+    
+    Security checks:
+    - Verifies that the requesting user owns the bot
+    - Validates the bot ID format
+    - Ensures the bot exists
+    
+    The wallet address can be used to:
+    - Monitor bot's trading activity
+    - Track bot's balance
+    - Verify transactions
+    """
+)
 async def get_bot_wallet(bot_id: str, wallet_auth: JWTWalletAuthDep):
     try:
         # Check if the bot belongs to the authenticated user
@@ -115,16 +247,60 @@ async def get_bot_wallet(bot_id: str, wallet_auth: JWTWalletAuthDep):
             raise BotNotFoundError(f"Bot wallet not found: {str(e)}")
 
     except BotPermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except BotNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error getting bot wallet: {str(e)}"
         )
 
-@router.post("/bots/{bot_id}/start")
+@router.post(
+    "/bots/{bot_id}/start",
+    responses={
+        200: {
+            "description": "Successfully started trading bot",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "success",
+                        "message": "Bot started successfully"
+                    }
+                }
+            }
+        },
+        **responses
+    },
+    summary="Start Trading Bot",
+    description="""
+    Start a trading bot with the specified configuration.
+    
+    The start process:
+    1. Validates user permissions
+    2. Checks Mango account configuration
+    3. Loads strategy configuration
+    4. Initializes the trading engine
+    5. Begins trading operations
+    
+    Requirements:
+    - Bot must exist and belong to the user
+    - Valid Mango account configuration
+    - Proper strategy parameters
+    
+    The bot will:
+    - Connect to specified markets
+    - Load trading parameters
+    - Begin executing the strategy
+    - Monitor market conditions
+    
+    Safety features:
+    - Permission verification
+    - Account validation
+    - Parameter checking
+    - Graceful error handling
+    """
+)
 async def start_bot(bot_id: str, start_request: StartStrategyRequest, wallet_auth: JWTWalletAuthDep):
     try:
         # Check if the bot belongs to the authenticated user
@@ -158,14 +334,14 @@ async def start_bot(bot_id: str, start_request: StartStrategyRequest, wallet_aut
             raise BotError(f"Error starting bot: {str(e)}")
 
     except BotPermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except BotConfigError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except BotError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error starting bot: {str(e)}"
         )
 

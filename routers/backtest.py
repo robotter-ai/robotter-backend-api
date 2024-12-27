@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from hummingbot.data_feed.candles_feed.candles_factory import CandlesFactory
 from hummingbot.strategy_v2.backtesting.backtesting_engine_base import BacktestingEngineBase
 from hummingbot.strategy_v2.backtesting.controllers_backtesting.directional_trading_backtesting import (
@@ -29,7 +29,116 @@ class BacktestConfigError(BacktestError):
 class BacktestEngineError(BacktestError):
     """Raised when there's an error during backtesting execution"""
 
-@router.post("/backtest", response_model=BacktestResponse)
+responses = {
+    400: {
+        "description": "Bad Request - Invalid backtesting configuration",
+        "content": {
+            "application/json": {
+                "examples": {
+                    "invalid_config": {
+                        "summary": "Invalid Configuration",
+                        "value": {"detail": "Invalid controller configuration: Missing required parameter 'stop_loss'"}
+                    },
+                    "invalid_time": {
+                        "summary": "Invalid Time Range",
+                        "value": {"detail": "Invalid time range: end_time (1000) must be greater than start_time (2000)"}
+                    },
+                    "invalid_engine": {
+                        "summary": "Invalid Engine Type",
+                        "value": {"detail": "Backtesting engine for controller type 'unknown' not found. Available types: ['directional_trading', 'market_making']"}
+                    }
+                }
+            }
+        }
+    },
+    500: {
+        "description": "Internal Server Error",
+        "content": {
+            "application/json": {
+                "examples": {
+                    "execution_error": {
+                        "summary": "Execution Error",
+                        "value": {"detail": "Error during backtesting execution: Failed to fetch market data"}
+                    },
+                    "processing_error": {
+                        "summary": "Processing Error",
+                        "value": {"detail": "Error processing backtesting results: Invalid data format"}
+                    }
+                }
+            }
+        }
+    }
+}
+
+@router.post(
+    "/backtest",
+    response_model=BacktestResponse,
+    responses={
+        200: {
+            "description": "Successfully ran backtesting simulation",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "executors": [{
+                            "id": "executor_1",
+                            "trades": 42,
+                            "win_rate": 0.65,
+                            "profit_loss": 1250.50
+                        }],
+                        "processed_data": {
+                            "features": {
+                                "price": [100.0, 101.0, 99.5],
+                                "volume": [1000, 1200, 800],
+                                "indicators": {
+                                    "ma_20": [99.5, 100.2, 100.8]
+                                }
+                            }
+                        },
+                        "results": {
+                            "total_trades": 42,
+                            "win_rate": 0.65,
+                            "profit_loss": 1250.50,
+                            "sharpe_ratio": 1.8,
+                            "max_drawdown": 0.15,
+                            "roi": 0.25
+                        }
+                    }
+                }
+            }
+        },
+        **responses
+    },
+    summary="Run Strategy Backtesting",
+    description="""
+    Run a backtesting simulation for a trading strategy with historical market data.
+    
+    The backtesting process:
+    1. Loads the strategy configuration
+    2. Fetches historical market data for the specified time range
+    3. Simulates trading with the strategy
+    4. Analyzes performance and generates statistics
+    
+    Supports two types of backtesting engines:
+    - Directional Trading: For trend-following and momentum strategies
+    - Market Making: For liquidity provision strategies
+    
+    Returns comprehensive results including:
+    - Executor statistics (trades, win rate, P&L)
+    - Processed market data and indicators
+    - Overall performance metrics:
+        - Total trades executed
+        - Win rate
+        - Profit/Loss
+        - Sharpe ratio
+        - Maximum drawdown
+        - Return on Investment (ROI)
+    
+    Time range requirements:
+    - start_time must be before end_time
+    - Minimum time range: 1 hour
+    - Maximum time range: 90 days
+    """
+)
 async def run_backtesting(backtesting_config: BacktestingConfig) -> BacktestResponse:
     try:
         # Load and validate controller config
@@ -91,13 +200,13 @@ async def run_backtesting(backtesting_config: BacktestingConfig) -> BacktestResp
             raise BacktestError(f"Error processing backtesting results: {str(e)}")
 
     except BacktestConfigError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except BacktestEngineError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     except BacktestError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error during backtesting: {str(e)}"
         )
