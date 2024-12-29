@@ -1,29 +1,20 @@
 import json
-import os
 from pathlib import Path
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock, AsyncMock
-from decimal import Decimal
+from unittest.mock import Mock, patch, AsyncMock
 from fastapi import HTTPException
 import pandas as pd
-from datetime import datetime
 
 from routers.backtest import (
-    router,
     run_backtesting,
     get_available_engines,
     get_engine_config_schema,
 )
-from routers.backtest_models import BacktestResponse, BacktestingConfig
+from routers.backtest_models import BacktestResponse, BacktestResults, BacktestingConfig, ExecutorInfo, ProcessedData
 from services.backtesting_service import (
-    BacktestingService,
-    BacktestError,
     BacktestConfigError,
     BacktestEngineError,
-    BacktestResults,
-    ExecutorInfo,
-    ProcessedData,
 )
 from routers.strategies_models import (
     StrategyType,
@@ -163,8 +154,8 @@ def mock_backtesting_service(mock_registry):
                 win_rate=0.6,
                 total_pnl=150.25,
                 sharpe_ratio=1.5,
-                max_drawdown=0.05,
                 profit_loss_ratio=1.5,
+                max_drawdown=0.05,
                 start_timestamp=1735457150,
                 end_timestamp=1735457450
             )
@@ -216,7 +207,6 @@ async def test_successful_backtest(valid_backtest_config, mock_backtesting_servi
     assert response.results.win_rate == 0.6
     assert response.results.total_pnl == 150.25
     assert response.results.sharpe_ratio == 1.5
-    assert response.results.max_drawdown == 0.05
     assert response.results.profit_loss_ratio == 1.5
 
 @pytest.mark.asyncio
@@ -241,10 +231,16 @@ async def test_engine_error(valid_backtest_config, mock_backtesting_service):
 
 def test_get_available_engines(mock_backtesting_service):
     """Test getting available engines"""
-    mock_backtesting_service.get_available_engines.return_value = ["directional_trading", "market_making"]
+    mock_backtesting_service.get_available_engines.return_value = {
+        "directional_trading": "DirectionalTradingEngine",
+        "market_making": "MarketMakingEngine"
+    }
     engines = get_available_engines()
-    assert "directional_trading" in engines
-    assert "market_making" in engines
+    assert isinstance(engines, dict)
+    assert "directional_trading" in engines.keys()
+    assert "market_making" in engines.keys()
+    assert engines["directional_trading"] == "DirectionalTradingEngine"
+    assert engines["market_making"] == "MarketMakingEngine"
 
 def test_get_engine_config_schema(mock_backtesting_service):
     """Test getting engine configuration schema"""

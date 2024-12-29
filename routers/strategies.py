@@ -2,7 +2,6 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, status
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from fastapi.responses import JSONResponse
 
 from services.libert_ai_service import LibertAIService
 from routers.strategies_models import (

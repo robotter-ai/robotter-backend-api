@@ -88,15 +88,6 @@ class StrategyParameter(BaseModel):
     # Type flags (for backward compatibility and specific handling)
     parameter_type: Optional[ParameterType] = None
 
-class Strategy(BaseModel):
-    id: str
-    name: str
-    description: str
-    type: StrategyType
-    module_path: str
-    config_class: str
-    parameters: Dict[str, StrategyParameter]
-
 class StrategyMapping(BaseModel):
     """Maps a strategy ID to its implementation details"""
     id: str  # e.g., "supertrend_v1"
@@ -105,6 +96,7 @@ class StrategyMapping(BaseModel):
     strategy_type: StrategyType
     display_name: str  # e.g., "Supertrend V1"
     description: str = ""
+    parameters: Dict[str, StrategyParameter] = {}
 
 class StrategyConfig(BaseModel):
     """Complete strategy configuration including metadata and parameters"""
@@ -181,7 +173,7 @@ def get_strategy_display_info() -> Dict[str, Dict[str, str]]:
 class StrategyRegistry:
     """Central registry for all trading strategies"""
     
-    _cache: Dict[str, Strategy] = {}
+    _cache: Dict[str, StrategyMapping] = {}
     
     @classmethod
     def _ensure_cache_loaded(cls):
@@ -189,13 +181,13 @@ class StrategyRegistry:
             cls._cache = discover_strategies()
     
     @classmethod
-    def get_all_strategies(cls) -> Dict[str, Strategy]:
+    def get_all_strategies(cls) -> Dict[str, StrategyMapping]:
         """Get all available strategies with their configurations"""
         cls._ensure_cache_loaded()
         return cls._cache
     
     @classmethod
-    def get_strategy(cls, strategy_id: str) -> Optional[Strategy]:
+    def get_strategy(cls, strategy_id: str) -> Optional[StrategyMapping]:
         """Get a specific strategy by ID"""
         cls._ensure_cache_loaded()
         strategy = cls._cache.get(strategy_id)
@@ -204,10 +196,10 @@ class StrategyRegistry:
         return strategy
     
     @classmethod
-    def get_strategies_by_type(cls, strategy_type: StrategyType) -> List[Strategy]:
+    def get_strategies_by_type(cls, strategy_type: StrategyType) -> List[StrategyMapping]:
         """Get all strategies of a specific type"""
         cls._ensure_cache_loaded()
-        return [s for s in cls._cache.values() if s.type == strategy_type]
+        return [s for s in cls._cache.values() if s.strategy_type == strategy_type]
 
 def convert_to_strategy_parameter(name: str, field: ModelField) -> StrategyParameter:
     """Convert a model field to a strategy parameter"""
@@ -332,7 +324,7 @@ def generate_strategy_mapping(module_path: str, config_class: Any) -> StrategyMa
     )
 
 @functools.lru_cache(maxsize=1)
-def discover_strategies() -> Dict[str, Strategy]:
+def discover_strategies() -> Dict[str, StrategyMapping]:
     """Discover and load all available strategies"""
     strategies = {}
     controllers_dir = "bots/controllers"
@@ -372,11 +364,11 @@ def discover_strategies() -> Dict[str, Strategy]:
                                 parameters[field_name] = param
                             
                             # Create strategy
-                            strategies[strategy_id] = Strategy(
+                            strategies[strategy_id] = StrategyMapping(
                                 id=strategy_id,
-                                name=display_info.get("pretty_name", " ".join(word.capitalize() for word in strategy_id.split("_"))),
+                                display_name=display_info.get("pretty_name", " ".join(word.capitalize() for word in strategy_id.split("_"))),
                                 description=display_info.get("description", obj.__doc__ or ""),
-                                type=strategy_type,
+                                strategy_type=strategy_type,
                                 module_path=module_path,
                                 config_class=obj.__name__,
                                 parameters=parameters
