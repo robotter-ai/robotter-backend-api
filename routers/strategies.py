@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, status
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
@@ -140,11 +140,17 @@ responses = {
     - Directional Trading: Strategies that follow market trends
     - Market Making: Strategies that provide market liquidity
     - Generic: Other types of strategies (e.g., arbitrage)
+    
+    Optional query parameter:
+    - strategy_type: Filter strategies by type (directional_trading, market_making, generic)
     """
 )
-async def get_strategies() -> Dict[str, StrategyConfig]:
+async def get_strategies(strategy_type: Optional[StrategyType] = None) -> Dict[str, StrategyConfig]:
     """Get all available strategies and their configurations."""
     try:
+        if strategy_type:
+            strategies = StrategyRegistry.get_strategies_by_type(strategy_type)
+            return {s.id: s for s in strategies}
         return StrategyRegistry.get_all_strategies()
     except StrategyError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -152,6 +158,77 @@ async def get_strategies() -> Dict[str, StrategyConfig]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error while fetching strategies: {str(e)}"
+        )
+
+@router.get(
+    "/strategies/{strategy_id}",
+    response_model=StrategyConfig,
+    responses={
+        200: {
+            "description": "Successfully retrieved strategy details",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "mapping": {
+                            "id": "bollinger_v1",
+                            "config_class": "BollingerConfig",
+                            "module_path": "bots.controllers.directional_trading.bollinger_v1",
+                            "strategy_type": "directional_trading",
+                            "display_name": "Bollinger Bands Strategy",
+                            "description": "Buys when price is low and sells when price is high based on Bollinger Bands."
+                        },
+                        "parameters": {
+                            "stop_loss": {
+                                "name": "stop_loss",
+                                "type": "Decimal",
+                                "required": True,
+                                "default": "0.03",
+                                "display_name": "Stop Loss",
+                                "description": "Stop loss percentage",
+                                "group": "Risk Management",
+                                "is_advanced": False,
+                                "constraints": {
+                                    "min_value": 0,
+                                    "max_value": 0.1
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        **responses
+    },
+    summary="Get Strategy Details",
+    description="""
+    Returns detailed information about a specific strategy, including all its parameters and configuration options.
+    
+    Use this endpoint to:
+    1. Get the complete list of parameters needed for the strategy
+    2. Understand parameter constraints (min/max values, valid options)
+    3. See default values and parameter descriptions
+    4. Determine which parameters are required vs optional
+    
+    This information is essential for:
+    - Configuring a strategy for backtesting
+    - Understanding parameter relationships
+    - Setting up proper risk management
+    - Optimizing strategy performance
+    """
+)
+async def get_strategy_details(strategy_id: str) -> StrategyConfig:
+    """Get detailed information about a specific strategy"""
+    try:
+        return StrategyRegistry.get_strategy(strategy_id)
+    except StrategyNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Strategy not found: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching strategy details: {str(e)}"
         )
 
 @router.post(

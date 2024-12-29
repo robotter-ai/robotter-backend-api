@@ -10,6 +10,7 @@ class BacktestingConfig(BaseModel):
     config: Union[Dict, str]
 
 class ExecutorInfo(BaseModel):
+    id: str
     level_id: str
     timestamp: int
     connector_name: str
@@ -19,6 +20,9 @@ class ExecutorInfo(BaseModel):
     side: str
     leverage: int
     position_mode: str
+    trades: int
+    win_rate: float
+    profit_loss: Decimal
 
 class ProcessedData(BaseModel):
     features: Dict[str, List[Union[float, int, str]]]
