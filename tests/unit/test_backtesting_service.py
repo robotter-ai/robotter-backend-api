@@ -4,8 +4,7 @@ from decimal import Decimal
 
 from services.backtesting_service import (
     BacktestingService,
-    BacktestConfigError,
-    BacktestEngineError
+    BacktestError
 )
 from routers.backtest_models import BacktestingConfig, BacktestResponse
 from routers.strategies_models import (
@@ -75,7 +74,7 @@ async def test_validate_time_range(backtesting_service):
     backtesting_service.validate_time_range(1000, 2000)
     
     # Invalid time range
-    with pytest.raises(BacktestConfigError, match="Invalid time range"):
+    with pytest.raises(BacktestError, match="Invalid time range"):
         backtesting_service.validate_time_range(2000, 1000)
 
 @pytest.mark.asyncio
@@ -102,7 +101,7 @@ async def test_transform_strategy_config_missing_id(backtesting_service):
         "bb_std": 2.0
     }
     
-    with pytest.raises(BacktestConfigError, match="Missing strategy_id"):
+    with pytest.raises(BacktestError, match="Missing strategy_id"):
         backtesting_service.transform_strategy_config(config)
 
 @pytest.mark.asyncio
@@ -114,7 +113,7 @@ async def test_transform_strategy_config_not_found(backtesting_service, mock_str
         "bb_std": 2.0
     }
     
-    with pytest.raises(BacktestConfigError, match="Strategy not found"):
+    with pytest.raises(BacktestError, match="Strategy not found"):
         backtesting_service.transform_strategy_config(config)
 
 @pytest.mark.asyncio
@@ -177,7 +176,7 @@ async def test_run_backtesting_engine_error(backtesting_service, mock_strategy_r
     mock_engine.run_backtesting.side_effect = Exception("Engine error")
     backtesting_service.backtesting_engines["directional_trading"] = mock_engine
     
-    with pytest.raises(BacktestEngineError, match="Error during backtesting execution"):
+    with pytest.raises(BacktestError, match="Error during backtesting execution"):
         await backtesting_service.run_backtesting(config)
 
 def test_get_available_engines(backtesting_service):
