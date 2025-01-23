@@ -1,0 +1,39 @@
+{
+    "executors": [
+        {
+            "id": "executor_1",
+            "level_id": "level_1",
+            "timestamp": 1735457150,
+            "connector_name": "binance",
+            "trading_pair": "BTC-USDT",
+            "entry_price": 50000.0,
+            "amount": 0.1,
+            "side": "BUY",
+            "leverage": 1,
+            "position_mode": "ONEWAY",
+            "trades": 10,
+            "win_rate": 0.6,
+            "profit_loss": 150.25
+        }
+    ],
+    "processed_data": {
+        "features": {
+            "price": [50100.0, 50200.0, 50300.0],
+            "volume": [10.5, 12.3, 8.7],
+            "BBL_100_2.0": [49800.0, 49900.0, 50000.0],
+            "BBM_100_2.0": [50000.0, 50100.0, 50200.0],
+            "BBU_100_2.0": [50200.0, 50300.0, 50400.0],
+            "BBP_100_2.0": [0.75, 0.80, 0.85]
+        }
+    },
+    "results": {
+        "total_pnl": 150.25,
+        "total_trades": 10,
+        "win_rate": 0.6,
+        "profit_loss_ratio": 1.5,
+        "sharpe_ratio": 1.5,
+        "max_drawdown": 0.05,
+        "start_timestamp": 1735457150,
+        "end_timestamp": 1735460750
+    }
+} 
